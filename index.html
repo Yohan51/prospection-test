@@ -418,6 +418,54 @@ body.en-tournee .actions, body.en-tournee .aide-carte { display: none; }
 .t-suite span { flex: none; display: inline-flex; align-items: center; gap: 4px; font: 600 13px/1 var(--f-texte); padding: 5px 8px; border-radius: 999px; background: var(--surface); color: var(--doux); font-variant-numeric: tabular-nums; }
 .t-suite span i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .t-suite span.ici { background: var(--ardoise); color: var(--surface); }
+/* ═══ Relevé de visite R1 (copie de test) ═══ */
+.releve { position: fixed; inset: 0; z-index: 1050; background: var(--fond); display: flex; flex-direction: column; }
+.releve[hidden] { display: none; }
+.rl-haut { background: var(--marine); color: #fff; padding: calc(env(safe-area-inset-top, 0px) + 26px) 14px 10px; display: flex; align-items: center; gap: 12px; }
+.rl-haut .t { flex: 1; min-width: 0; }
+.rl-haut b { font: 700 19px/1.1 var(--f-titre); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rl-haut small { font-size: 13px; opacity: .8; }
+.rl-prog { height: 4px; background: rgba(255,255,255,.2); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+.rl-prog i { display: block; height: 100%; background: var(--vert); transition: width .3s; }
+.rl-x { width: 40px; height: 40px; border-radius: 10px; border: 0; background: rgba(255,255,255,.14); color: #fff; font-size: 18px; flex: none; }
+.rl-etapes { display: flex; gap: 6px; overflow-x: auto; padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--trait); -webkit-overflow-scrolling: touch; flex: none; }
+.rl-etapes button { flex: none; border: 1px solid var(--trait); background: var(--surface); color: var(--ardoise); border-radius: 999px; padding: 6px 12px; font: 600 15px/1 var(--f-titre); display: flex; align-items: center; gap: 6px; }
+.rl-etapes button .n { width: 19px; height: 19px; border-radius: 50%; background: var(--fond); color: var(--doux); font-size: 12px; display: flex; align-items: center; justify-content: center; }
+.rl-etapes button.actif { border-color: var(--marine); background: #e8eef7; }
+.rl-etapes button.actif .n { background: var(--marine); color: #fff; }
+.rl-etapes button.fait .n { background: var(--st-r1); color: #fff; }
+.rl-corps { flex: 1; overflow-y: auto; padding: 16px 14px 24px; overscroll-behavior: contain; }
+.rl-corps > div { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.rl-corps h2 { font: 700 24px/1.1 var(--f-titre); margin: 0; }
+.rl-bloc { background: var(--surface); border: 1px solid var(--trait); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.rl-bloc > span:first-child { font-weight: 600; font-size: 15px; }
+.rl-bloc textarea, .rl-bloc input:not([type=checkbox]) { width: 100%; }
+.rl-bas { flex: none; background: var(--surface); border-top: 1px solid var(--trait); padding: 10px 14px calc(env(safe-area-inset-bottom, 0px) + 10px); display: flex; align-items: center; gap: 10px; }
+.rl-bas .sp { flex: 1; text-align: center; font-size: 14px; color: var(--doux); }
+.rl-gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.rl-tuile { border: 1px solid var(--trait); border-radius: 12px; overflow: hidden; background: var(--surface); display: flex; flex-direction: column; }
+.rl-tuile img { width: 100%; height: 120px; object-fit: cover; display: block; background: #fff; }
+.rl-tuile .bt { display: flex; border-top: 1px solid var(--trait); }
+.rl-tuile .bt button { flex: 1; border: 0; background: none; padding: 9px 4px; font: 600 15px/1 var(--f-titre); color: var(--ardoise); }
+.rl-tuile .bt button + button { border-left: 1px solid var(--trait); }
+.rl-tuile small { padding: 4px 8px 0; color: var(--doux); font-size: 12px; }
+.rl-ajout { border: 2px dashed var(--trait); border-radius: 12px; min-height: 160px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: var(--surface); color: var(--ardoise); font: 600 16px/1.1 var(--f-titre); }
+.rl-ajout svg { width: 30px; height: 30px; }
+.rl-recap table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.rl-recap td { padding: 4px 0; vertical-align: top; border-bottom: 1px solid var(--trait); }
+.rl-recap td:first-child { color: var(--doux); width: 48%; padding-right: 8px; }
+.rl-recap h4 { margin: 8px 0 2px; font: 700 14px/1 var(--f-titre); letter-spacing: .06em; text-transform: uppercase; color: var(--doux); }
+.dessin { position: fixed; inset: 0; z-index: 1080; background: #1a2430; display: flex; flex-direction: column; }
+.dessin[hidden] { display: none; }
+.dessin-barre { background: #141c26; color: #fff; padding: calc(env(safe-area-inset-top, 0px) + 26px) 10px 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dessin-barre .t { flex: 1 1 100%; font-weight: 600; font-size: 15px; }
+.dessin-coul { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255,255,255,.3); padding: 0; }
+.dessin-coul.on { border-color: #fff; box-shadow: 0 0 0 2px #141c26, 0 0 0 4px #fff; }
+.dessin-btn { border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08); color: #fff; border-radius: 9px; padding: 8px 11px; font: 600 15px/1 var(--f-titre); }
+.dessin-btn.on { background: #fff; color: #141c26; }
+.dessin-btn.go { background: var(--st-r1); border-color: var(--st-r1); }
+.dessin-zone { flex: 1; position: relative; overflow: hidden; touch-action: none; background: #fff; margin: 8px; border-radius: 10px; }
+.dessin-zone canvas { display: block; touch-action: none; }
 </style>
 </head>
 <body>
@@ -1236,11 +1284,14 @@ function carteSuivi(p) {
     ${et !== 'r1' && (nomClient(p) || telClient(p)) ? `<span class="qui">${esc([nomClient(p), telClient(p)].filter(Boolean).join(' · '))}</span>` : ''}
     ${et !== 'r1' ? etiquettesBesoins(besoinsDe(p)) : ''}${et === 'r2' ? ligneSms(p, 'r2') : ''}
     <div class="ligne-btns">${et === 'r2' ? boutonSms(p, 'r2') : ''}${et !== 'r1' && telClient(p) ? `<a class="b2" href="tel:${esc(telClient(p).replace(/[^+\d]/g, ''))}">Appeler</a>` : ''}${et === 'r2' && rdvR2(p) ? '<button class="b2 jaune" id="b-prep">Préparer le R2</button><button class="b2" id="b-r2cal">R2 au calendrier</button>' : ''}${btns}</div>
+    <div class="ligne-btns"><button class="b2${et === 'r1' ? ' jaune' : ''}" id="b-releve">Relevé R1 · ${esc(etatReleve(p))}</button>${et === 'signe' ? '<button class="b2 vert" id="b-prefiche">Pré-fiche chantier</button>' : ''}</div>
     ${histo ? `<ul class="histo">${histo}</ul><button class="lien" id="b-suivi-annuler">Annuler la dernière étape</button>` : ''}
   </div>`;
 }
 function brancherSuivi(f, p) {
   const bp = f.querySelector('#b-prep'); if (bp) bp.onclick = () => feuillePrep(p);
+  const brl = f.querySelector('#b-releve'); if (brl) brl.onclick = () => ouvrirReleve(p.id);
+  const bpf = f.querySelector('#b-prefiche'); if (bpf) bpf.onclick = () => partagerPrefiche(p);
   f.querySelectorAll('[data-et]').forEach(b => b.onclick = () => feuilleEtape(p, b.dataset.et));
   const r2 = f.querySelector('#b-r2cal'); if (r2) r2.onclick = () => ajouterAuCalendrier(p, evenementR2(p));
   const s2 = f.querySelector('#b-r2sms'); if (s2) s2.onclick = () => { envoyerSms(smsDe(p, 'r2')); ouvrirPorte(p.id); };
@@ -1263,12 +1314,15 @@ function feuilleEtape(p, etape) {
         <label class="champ">Heure<input id="e-heure" type="time" value="${esc(ancien.heure || '18:00')}" step="900"></label></div>
       <div class="champ" style="gap:8px">Durée<div class="puces">${[45, 60, 90].map(m => `<button class="puce" data-m="${m}" aria-pressed="${m === (ancien.duree || 60)}">${m < 60 ? m + ' min' : m === 60 ? '1 h' : '1 h 30'}</button>`).join('')}</div></div>
       <label class="champ">À préparer<input id="e-note" value="${esc(ancien.note || '')}" placeholder="ex. devis vapeur + hydrofuge, échantillons" autocomplete="off"></label>`,
-    devis: `<label class="champ">Montant du devis (TTC)<input id="e-montant" inputmode="decimal" placeholder="ex. 8 500" autocomplete="off"></label>
+    devis: `<label class="champ">Montant du devis (TTC)<input id="e-montant" inputmode="decimal" value="${estimReleve(p) || ''}" placeholder="ex. 8 500" autocomplete="off"></label>
+      ${estimReleve(p) ? '<span class="sous" style="margin:-4px 0 0">Prérempli avec l’estimation du relevé R1 : corrige-le si le devis diffère.</span>' : ''}
       <label class="champ">Réf. du devis Interfast<input id="e-ref" placeholder="ex. DEV-2026-0412" autocomplete="off" autocapitalize="characters"></label>
       <label class="champ">Note<input id="e-note" placeholder="ex. envoyé par mail, rappeler vendredi" autocomplete="off"></label>`,
     signe: `<label class="champ">Montant signé (TTC)<input id="e-montant" inputmode="decimal" value="${montantDevis(p) || ''}" placeholder="ex. 8 500" autocomplete="off"></label>
       <label class="champ">Réf. du devis Interfast<input id="e-ref" value="${esc(refDevis(p))}" placeholder="ex. DEV-2026-0412" autocomplete="off" autocapitalize="characters"></label>
-      <label class="champ">Note<input id="e-note" placeholder="ex. travaux prévus en mars" autocomplete="off"></label>`,
+      <label class="champ">Note<input id="e-note" placeholder="ex. travaux prévus en mars" autocomplete="off"></label>
+      <label class="champ">Commentaire pour l’équipe technique<textarea id="e-equipe" rows="3" placeholder="Accès, contraintes, points de vigilance, matériel à prévoir…"></textarea></label>
+      <span class="sous" style="margin:-4px 0 0">Repris dans la pré-fiche chantier (PDF) avec le relevé R1, sans les montants.</span>`,
     perdu: `<div class="champ" style="gap:8px">Pourquoi ?<div class="puces">${RAISONS.map(r => `<button class="puce" data-r="${esc(r)}" aria-pressed="false">${esc(r)}</button>`).join('')}</div></div>
       <label class="champ">Note<input id="e-note" placeholder="ex. a signé avec un concurrent à 6 000 €" autocomplete="off"></label>`,
   }[etape];
@@ -1291,6 +1345,7 @@ function feuilleEtape(p, etape) {
       }
       if (etape === 'devis' || etape === 'signe') { e.montant = lireMontant(val('#e-montant')); if (val('#e-ref')) e.ref = val('#e-ref').toUpperCase(); }
       if (etape === 'perdu') e.raison = raison;
+      if (etape === 'signe' && val('#e-equipe')) e.equipe = val('#e-equipe');
       const ancienneR2 = (smsDe(p, 'r2') || {}).cle;
       p.suivi = [...suiviDe(p), e];
       if (etape === 'r2') retenirAncienneCle(p, 'r2', ancienneR2);
@@ -1840,6 +1895,16 @@ function texteFiche(p) {
   const notes = p.visites.filter(v => v.note && v.canal !== 'salon' && v.canal !== 'direct').map(v => `${new Date(v.date).toLocaleDateString('fr-FR')} : ${v.note}`);
   if (notes.length) L.push(`Notes de passage : ${notes.join(' / ')}`);
   if (p.salon) L.push(`Accepte d’être recontacté : ${c.consent ? 'oui' : 'non noté'}`);
+  if (p.releve) {
+    const rc = p.releve.recap || {}, est = [lireMontant(rc.estimBasse), lireMontant(rc.estimHaute)].filter(Boolean);
+    L.push(`— RELEVÉ DE VISITE R1${p.releve.done ? '' : ' (en cours)'} —`);
+    L.push(...lignesReleve(p).map(l => l.startsWith('— ') ? l.replace(/^— /, '— R1 · ') : l));
+    if (rc.preconisations || est.length || rc.suite || p.releve.signature) L.push('— PRÉCONISATIONS —');
+    if (rc.preconisations) L.push(`Travaux préconisés : ${rc.preconisations}`);
+    if (est.length) L.push(`Estimation indicative : ${est.map(euros).join(' à ')} TTC`);
+    if (rc.suite) L.push(`Prochaine étape : ${rc.suite}`);
+    if (p.releve.signature) L.push(`Signature du client : recueillie le ${new Date(p.releve.signature.date).toLocaleDateString('fr-FR')}`);
+  }
   if (photosDe(p).length) L.push(`Photos : ${photosDe(p).length} (jointes si partagées, sinon dans l’appli)`);
   if (!p.horsCarte) L.push(`Itinéraire : ${lienPlans(p)}`);
   return L.join('\n');
@@ -1915,17 +1980,18 @@ function jpegInfos(o) {   // largeur, hauteur et nombre de composantes d'un JPEG
   }
   return null;
 }
-function pdfFiche(p, photos) {
+function pdfFiche(p, photos, opts) {
+  opts = opts || {};
   const W = 595.28, H = 841.89, M = 48, BLEU = '0.106 0.2 0.333', GRIS = '0.42 0.45 0.5', NOIR = '0.12 0.14 0.18';
   const pages = []; let ops, y;
   const page = () => { ops = []; pages.push(ops); y = H - M; };
   const texte = (x, yy, s, taille, gras, couleur) => ops.push(`BT /${gras ? 'F2' : 'F1'} ${taille} Tf ${couleur || NOIR} rg ${x.toFixed(2)} ${yy.toFixed(2)} Td ${pdfChaine(s)} Tj ET`);
   const place = h => { if (y - h < M + 20) page(); };
-  const L = texteFiche(p).split('\n');
+  const L = opts.lignes || texteFiche(p).split('\n');
   page();
   // Bandeau
   ops.push(`${BLEU} rg 0 ${H - 92} ${W} 92 re f`);
-  texte(M, H - 46, 'FICHE PROSPECT', 20, true, '1 1 1');
+  texte(M, H - 46, opts.titre || 'FICHE PROSPECT', 20, true, '1 1 1');
   texte(M, H - 68, `SUBLIME TOIT${p.salon ? ' · Salon ' + p.salon.nom : ''}`, 10, false, '0.85 0.89 0.95');
   y = H - 92 - 34;
   // Nom en grand
@@ -1936,14 +2002,19 @@ function pdfFiche(p, photos) {
   // Rubriques « Libellé : valeur »
   const COL = 132, LV = W - 2 * M - COL;
   for (const ligne of L.slice(2)) {
+    if (/^— .* —$/.test(ligne)) {   // intertitre de rubrique (relevé R1…)
+      place(44); y -= 8; texte(M, y, ligne.replace(/^— | —$/g, ''), 11, true, BLEU); y -= 6;
+      ops.push(`0.85 0.87 0.9 RG 0.6 w ${M} ${y} m ${W - M} ${y} l S`); y -= 16; continue;
+    }
     const i = ligne.indexOf(' : '); if (i < 0) continue;
     const lib = ligne.slice(0, i), val = ligne.slice(i + 3);
     if (lib === 'Nom' || lib === 'Photos') continue;   // déjà en titre / photos intégrées plus bas
-    const lignes = pdfCouper(val, 11, LV);
-    place(lignes.length * 15 + 8);
-    texte(M, y, lib, 9.5, true, GRIS);
+    const lignes = pdfCouper(val, 11, LV), libs = pdfCouper(lib, 9.5, COL - 10, true);
+    const n = Math.max(lignes.length, libs.length);
+    place(n * 15 + 8);
+    libs.forEach((l, k) => texte(M, y - k * 15, l, 9.5, true, GRIS));
     lignes.forEach((l, k) => texte(M + COL, y - k * 15, l, 11, false));
-    y -= lignes.length * 15 + 9;
+    y -= n * 15 + 9;
   }
   // Photos, deux par ligne
   const imgs = [];
@@ -1960,6 +2031,13 @@ function pdfFiche(p, photos) {
       col = 1 - col; if (col === 0) y -= hautLigne + 14;
     }
     if (col === 1) y -= hautLigne + 14;
+  }
+  // Signature du client (relevé R1)
+  if (opts.signature) {
+    const sg = opts.signature, k = Math.min(220 / sg.w, 90 / sg.h), w = sg.w * k, h = sg.h * k;
+    place(h + 40); y -= 8; texte(M, y, 'SIGNATURE DU CLIENT', 9.5, true, GRIS); y -= 10;
+    const nomImg = `Im${imgs.length + 1}`; imgs.push(Object.assign({ nom: nomImg }, sg));
+    ops.push(`q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} ${M.toFixed(2)} ${(y - h).toFixed(2)} cm /${nomImg} Do Q`); y -= h + 14;
   }
   // Pied de page sur chaque page
   const le = new Date().toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
@@ -1990,15 +2068,24 @@ function assemblerPdf(pages, imgs, W, H) {
   ecrire(`trailer\n<< /Size ${nbObj + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
   return new Blob(parts, { type: 'application/pdf' });
 }
-async function fichierPdfFiche(p) {
+async function imageJpeg(blob) {
+  const octets = new Uint8Array(await blob.arrayBuffer()), inf = octets[0] === 0xFF && octets[1] === 0xD8 ? jpegInfos(octets) : null;
+  return inf && inf.w && inf.h ? Object.assign({ octets }, inf) : null;
+}
+async function imagesPdf(liste) {
   const photos = [];
-  for (const x of photosDe(p)) {
+  for (const x of liste) {
     const r = await photosDB.lire(x.id).catch(() => null);
     if (!r || !r.blob) continue;
-    const octets = new Uint8Array(await r.blob.arrayBuffer()), inf = octets[0] === 0xFF && octets[1] === 0xD8 ? jpegInfos(octets) : null;
-    if (inf && inf.w && inf.h) photos.push(Object.assign({ octets }, inf));
+    const im = await imageJpeg(r.blob); if (im) photos.push(im);
   }
-  return new File([pdfFiche(p, photos)], `Fiche-${cleAdresse(sujetFiche(p)).replace(/ /g, '-').slice(0, 50) || 'prospect'}.pdf`, { type: 'application/pdf' });
+  return photos;
+}
+async function fichierPdfFiche(p) {
+  const photos = await imagesPdf(photosDe(p));
+  let signature = null;
+  if (p.releve && p.releve.signature) try { signature = await imageJpeg(await (await fetch(p.releve.signature.src)).blob()); } catch (e) {}
+  return new File([pdfFiche(p, photos, { signature })], `Fiche-${cleAdresse(sujetFiche(p)).replace(/ /g, '-').slice(0, 50) || 'prospect'}.pdf`, { type: 'application/pdf' });
 }
 async function partagerPdfFiche(p) {
   try {
@@ -2140,6 +2227,7 @@ function feuillePrep(p) {
       <label class="champ">Mes notes pendant le ${mode.toUpperCase()}<textarea id="prep-notes" rows="4" placeholder="ex. veut un devis avant fin novembre, compare avec un autre artisan">${esc(prep.notes || '')}</textarea></label>
       <h3>Et après le rendez-vous ?</h3>
       <div class="ligne-btns">${mode === 'r1' ? '<button class="b2" data-et="r2">R2 calé</button>' : ''}<button class="b2" data-et="devis">Devis envoyé</button><button class="b2 vert" data-et="signe">Signé</button><button class="b2 danger" data-et="perdu">Perdu</button></div>
+      <div class="ligne-btns"><button class="b2 jaune" id="prep-releve">Relevé de visite · ${esc(etatReleve(p))}</button></div>
       <div class="ligne-btns"><button class="b2" id="prep-porte">Fiche complète</button><button class="b2" id="prep-fiche">M’envoyer la fiche</button></div>
     </div>`, f => {
     const garder = () => { p[cle] = { faits: [...f.querySelectorAll('[data-etape-prep]')].map(x => x.checked), notes: f.querySelector('#prep-notes').value, maj: maintenant() }; sauver(); };
@@ -2148,6 +2236,7 @@ function feuillePrep(p) {
     f.querySelectorAll('[data-et]').forEach(b => b.onclick = () => { garder(); feuilleEtape(p, b.dataset.et); });
     f.querySelector('#prep-porte').onclick = () => { garder(); ouvrirPorte(p.id); };
     f.querySelector('#prep-fiche').onclick = () => { garder(); feuilleFiche(p); };
+    f.querySelector('#prep-releve').onclick = () => { garder(); ouvrirReleve(p.id); };
     brancherPhotos(f.querySelector('#photos'), p);
     remplirZone(f);
     const vue = f.querySelector('#vue-toit');
@@ -3008,6 +3097,403 @@ function htmlJournee() {
   return h;
 }
 
+/* ═══════════════════════════════════════════════════════════
+   RELEVÉ DE VISITE R1 (copie de test)
+   Fiche technique remplie pendant le R1 : rubriques choisies selon les besoins,
+   photos annotées et croquis (rangés avec les photos de la fiche), préconisations,
+   estimation, signature du client. Rattachée à la porte : p.releve
+═══════════════════════════════════════════════════════════ */
+const RELEVE_ETAPES = [
+  { k: 'besoin', nom: 'Besoin', special: 'besoin' },
+  { k: 'contexte', nom: 'Contexte', champs: [
+    { k: 'motif', t: 'texte', nom: 'Motif de la visite', ph: 'Fuite, mousse, ravalement, rénovation…' },
+    { k: 'occupant', t: 'choix', nom: 'Statut', o: ['Propriétaire occupant', 'Propriétaire bailleur', 'Locataire', 'Autre'] },
+    { k: 'bien', t: 'choix', nom: 'Type de bien', o: ['Maison individuelle', 'Immeuble', 'Bâtiment pro', 'Autre'] },
+    { k: 'annee', t: 'texte', nom: 'Année de construction (approx.)', ph: 'ex. 1985', mode: 'numeric' },
+    { k: 'delai', t: 'choix', nom: 'Délai souhaité', o: ['Urgent', '< 3 mois', '3 à 6 mois', '> 6 mois', 'Non défini'] },
+    { k: 'budget', t: 'texte', nom: 'Budget évoqué', ph: 'facultatif' },
+    { k: 'decideur', t: 'choix', nom: 'Décideur présent', o: ['Oui', 'À confirmer', 'Non'] },
+  ] },
+  { k: 'toiture', nom: 'Toiture', bloc: true, champs: [
+    { k: 'type', t: 'choix', nom: 'Type de couverture', o: ['Tuiles mécaniques', 'Tuiles plates', 'Ardoise', 'Bac acier', 'Fibrociment', 'Zinc', 'Shingle', 'Autre'] },
+    { k: 'surface', t: 'texte', nom: 'Surface de toiture (m²)', ph: 'ex. 120', mode: 'decimal' },
+    { k: 'pente', t: 'choix', nom: 'Pente', o: ['Faible', 'Moyenne', 'Forte'] },
+    { k: 'pans', t: 'choix', nom: 'Nombre de pans', o: ['1', '2', '3', '4 et +'] },
+    { k: 'etat', t: 'choix', nom: 'État général', o: ['Bon', 'Moyen', 'Dégradé'] },
+    { k: 'mousse', t: 'choix', nom: 'Mousse / salissures', o: ['Aucune', 'Légère', 'Importante'] },
+    { k: 'tuiles', t: 'choix', nom: 'Tuiles cassées / déplacées', o: ['Non', 'Quelques-unes', 'Nombreuses'] },
+    { k: 'faitage', t: 'choix', nom: 'Faîtage', o: ['Bon', 'À reprendre', 'HS'] },
+    { k: 'etancheite', t: 'choix', nom: 'Étanchéité', o: ['OK', 'Infiltrations', 'Fuite active'] },
+    { k: 'acces', t: 'choix', nom: 'Accès chantier', o: ['Échelle', 'Échafaudage', 'Nacelle'] },
+    { k: 'hauteur', t: 'choix', nom: 'Hauteur', o: ['RDC', 'R+1', 'R+2', 'R+3 et +'] },
+    { k: 'obs', t: 'zone', nom: 'Observations toiture', ph: 'Notes libres…' },
+  ] },
+  { k: 'charpente', nom: 'Charpente & combles', bloc: true, champs: [
+    { k: 'type', t: 'choix', nom: 'Charpente', o: ['Traditionnelle', 'Fermettes', 'Métallique', 'Inconnue'] },
+    { k: 'etat', t: 'choix', nom: 'État charpente', o: ['Bon', 'Traces d’humidité', 'Attaque insectes', 'Dégradée'] },
+    { k: 'combles', t: 'choix', nom: 'Combles', o: ['Perdus', 'Aménagés', 'Aménageables'] },
+    { k: 'acces', t: 'choix', nom: 'Accès combles', o: ['Trappe', 'Escalier', 'Aucun'] },
+    { k: 'obs', t: 'zone', nom: 'Observations charpente / combles', ph: 'Notes libres…' },
+  ] },
+  { k: 'isolation', nom: 'Isolation & énergie', bloc: true, champs: [
+    { k: 'isolation', t: 'choix', nom: 'Isolation existante', o: ['Aucune', 'Laine de verre', 'Laine de roche', 'Ouate de cellulose', 'Autre', 'Inconnue'] },
+    { k: 'epaisseur', t: 'choix', nom: 'Épaisseur', o: ['< 10 cm', '10 à 20 cm', '20 à 30 cm', '> 30 cm'] },
+    { k: 'etatIso', t: 'choix', nom: 'État isolation', o: ['Bon', 'Tassée', 'Humide', 'À refaire'] },
+    { k: 'ventilation', t: 'choix', nom: 'Ventilation', o: ['Aucune', 'VMC simple flux', 'VMC double flux', 'Chatières'] },
+    { k: 'chauffage', t: 'choix', nom: 'Chauffage', o: ['Électrique', 'Gaz', 'Fioul', 'Pompe à chaleur', 'Bois', 'Autre'] },
+    { k: 'conso', t: 'texte', nom: 'Conso élec. annuelle (kWh)', ph: 'ex. 9000', mode: 'numeric' },
+    { k: 'facture', t: 'texte', nom: 'Facture énergie annuelle (€)', ph: 'facultatif', mode: 'numeric' },
+    { k: 'aides', t: 'choix', nom: 'Aides mobilisables', o: ['À vérifier', 'MaPrimeRénov’', 'CEE', 'Éco-PTZ', 'Non éligible'] },
+    { k: 'obs', t: 'zone', nom: 'Observations énergie', ph: 'Notes libres…' },
+  ] },
+  { k: 'zinguerie', nom: 'Zinguerie & ouvertures', bloc: true, champs: [
+    { k: 'gouttieres', t: 'choix', nom: 'Gouttières', o: ['PVC', 'Zinc', 'Aluminium', 'Cuivre', 'Aucune'] },
+    { k: 'etatGout', t: 'choix', nom: 'État gouttières', o: ['Bon', 'À nettoyer', 'À remplacer'] },
+    { k: 'descentes', t: 'choix', nom: 'Descentes', o: ['OK', 'Bouchées', 'À remplacer'] },
+    { k: 'noues', t: 'choix', nom: 'Noues', o: ['OK', 'À reprendre', 'Absentes'] },
+    { k: 'bandeaux', t: 'choix', nom: 'Bandeaux / rives', o: ['Bon', 'À repeindre', 'À remplacer', 'Absents'] },
+    { k: 'sousFaces', t: 'choix', nom: 'Sous-faces', o: ['Bon', 'À repeindre', 'À remplacer', 'Absentes'] },
+    { k: 'velux', t: 'choix', nom: 'Fenêtres de toit / Velux', o: ['Aucune', '1', '2', '3 et +'] },
+    { k: 'etatVelux', t: 'choix', nom: 'État Velux', o: ['Bon', 'À réviser', 'À remplacer', 'N/A'] },
+    { k: 'facade', t: 'choix', nom: 'Façade', o: ['Non concernée', 'Bon état', 'Fissures', 'Ravalement à prévoir'] },
+    { k: 'obs', t: 'zone', nom: 'Observations zinguerie', ph: 'Notes libres…' },
+  ] },
+  { k: 'photos', nom: 'Photos', special: 'photos' },
+  { k: 'croquis', nom: 'Croquis', special: 'croquis' },
+  { k: 'recap', nom: 'Préconisations', special: 'recap' },
+];
+const RELEVE_BLOCS = ['toiture', 'charpente', 'isolation', 'zinguerie'];
+const RELEVE_AIDE = { besoin: 'Choisis un ou plusieurs besoins : la fiche n’affiche que les rubriques utiles.', contexte: 'Le client et sa demande.', toiture: 'État et caractéristiques de la couverture.', charpente: 'Structure et combles.', isolation: 'Isolation existante et profil énergétique (utile pour les aides).', zinguerie: 'Évacuation des eaux, bandeaux, sous-faces, fenêtres de toit, façade.', photos: 'Prends des photos et annote-les au doigt : traits, flèches, cadres. La photo d’origine est conservée.', croquis: 'Dessine le toit, l’implantation, les cotes à main levée.', recap: 'Préconisations, estimation et signature du client.' };
+// Rubriques ouvertes selon le texte du besoin (ta liste de besoins reste modifiable dans les réglages)
+function blocsDuBesoin(b) {
+  const t = cleAdresse(b), s = new Set();
+  if (/nettoy|vapeur|demouss|hydrofug|mousse/.test(t)) s.add('toiture');
+  if (/velux|fenetre|puits/.test(t)) { s.add('toiture'); s.add('zinguerie'); }
+  if (/goutti|zinc|descente|cheneau|bandeau|sous face|rive/.test(t)) s.add('zinguerie');
+  if (/fuite|repar|infiltr/.test(t)) { s.add('toiture'); s.add('charpente'); s.add('zinguerie'); }
+  if (/isol|comble|energie/.test(t)) { s.add('charpente'); s.add('isolation'); }
+  if (/couvert|tuile|ardoise|toiture/.test(t)) { s.add('toiture'); s.add('charpente'); s.add('zinguerie'); }
+  if (/facade|ravalement/.test(t)) s.add('zinguerie');
+  return s.size ? [...s] : RELEVE_BLOCS;
+}
+function etapesReleve(p) {
+  const r = p.releve || {}, bs = besoinsDe(p), blocs = new Set();
+  if (r.tout || !bs.length) RELEVE_BLOCS.forEach(x => blocs.add(x));
+  else bs.forEach(b => blocsDuBesoin(b).forEach(x => blocs.add(x)));
+  return RELEVE_ETAPES.filter(e => !e.bloc || blocs.has(e.k));
+}
+const croquisDe = p => photosDe(p).filter(x => x.croquis);
+const photosReleve = p => photosDe(p).filter(x => !x.croquis);
+function releveDe(p) {
+  if (!p.releve) p.releve = { cree: maintenant(), auteur: etat.moi, done: false };
+  for (const k of ['contexte', ...RELEVE_BLOCS, 'recap']) if (!p.releve[k]) p.releve[k] = {};
+  return p.releve;
+}
+function etapeRemplie(p, k) {
+  const r = p.releve || {};
+  if (k === 'besoin') return besoinsDe(p).length > 0;
+  if (k === 'photos') return photosReleve(p).length > 0;
+  if (k === 'croquis') return croquisDe(p).length > 0;
+  if (k === 'recap') return !!(r.recap && (r.recap.preconisations || r.recap.estimBasse || r.recap.estimHaute || r.recap.suite)) || !!r.signature;
+  const o = r[k]; return !!o && Object.values(o).some(v => v !== '' && v != null);
+}
+function avancementReleve(p) { const e = etapesReleve(p); return Math.round(100 * e.filter(x => etapeRemplie(p, x.k)).length / e.length); }
+function etatReleve(p) {
+  if (!p.releve) return 'à faire';
+  if (p.releve.done) return 'complet';
+  return avancementReleve(p) + ' %';
+}
+// Estimation TTC retenue : milieu de la fourchette, ou la seule borne saisie
+function estimReleve(p) {
+  const r = p.releve && p.releve.recap; if (!r) return 0;
+  const b = lireMontant(r.estimBasse), h = lireMontant(r.estimHaute);
+  return b && h ? Math.round((b + h) / 2) : (h || b);
+}
+// Lignes « Libellé : valeur » du relevé, pour la fiche (mail + PDF). sansBudget : pour la pré-fiche équipe
+function lignesReleve(p, sansBudget) {
+  const r = p.releve; if (!r) return [];
+  const L = [];
+  for (const e of RELEVE_ETAPES.filter(x => x.champs)) {
+    const d = r[e.k] || {};
+    const ls = e.champs.filter(c => !(sansBudget && c.k === 'budget') && d[c.k] !== '' && d[c.k] != null).map(c => `${c.nom} : ${d[c.k]}`);
+    if (ls.length) L.push(`— ${e.nom.toUpperCase()} —`, ...ls);
+  }
+  return L;
+}
+let rl = null, rlMinuterie = null;
+function sauverReleve() {
+  if (!rl) return;
+  rl.p.releve.maj = maintenant(); rl.p.releve.auteurMaj = etat.moi;
+  clearTimeout(rlMinuterie); rlMinuterie = setTimeout(() => { sauver(); }, 500);
+}
+function ouvrirReleve(id, etape) {
+  const p = etat.portes.find(x => x.id === id); if (!p) return;
+  releveDe(p);
+  fermerFeuille();
+  let o = $('#releve');
+  if (!o) { o = document.createElement('div'); o.id = 'releve'; o.className = 'releve'; document.body.appendChild(o); }
+  o.hidden = false;
+  rl = { p, i: 0 };
+  const e = etapesReleve(p);
+  rl.i = typeof etape === 'string' ? Math.max(0, e.findIndex(x => x.k === etape)) : 0;
+  dessinerReleve();
+}
+function fermerReleve() {
+  if (!rl) return;
+  clearTimeout(rlMinuterie); sauver(); dessiner();
+  const id = rl.p.id; rl = null;
+  $('#releve').hidden = true;
+  ouvrirPorte(id);
+}
+function dessinerReleve() {
+  const o = $('#releve'), p = rl.p, e = etapesReleve(p);
+  rl.i = Math.min(rl.i, e.length - 1);
+  o.innerHTML = `<div class="rl-haut"><div class="t"><b>Relevé R1 · ${esc(nomClient(p) || court(p) || 'Client')}</b><small>${esc([court(p), texteBesoins(besoinsDe(p))].filter(Boolean).join(' · '))}</small>
+      <div class="rl-prog"><i id="rl-prog" style="width:${avancementReleve(p)}%"></i></div></div>
+      <button class="rl-x" id="rl-x" aria-label="Fermer le relevé">✕</button></div>
+    <div class="rl-etapes" id="rl-etapes">${e.map((x, i) => `<button data-i="${i}" class="${i === rl.i ? 'actif' : ''}${etapeRemplie(p, x.k) ? ' fait' : ''}"><span class="n">${etapeRemplie(p, x.k) ? '✓' : i + 1}</span>${esc(x.nom)}</button>`).join('')}</div>
+    <div class="rl-corps" id="rl-corps"></div>
+    <div class="rl-bas"><button class="b2" id="rl-prec"${rl.i === 0 ? ' disabled' : ''}>← Précédent</button><span class="sp">Étape ${rl.i + 1} / ${e.length}</span>
+      ${rl.i === e.length - 1 ? '<button class="b2 plein" id="rl-fin">Terminer</button>' : '<button class="b2 plein" id="rl-suiv">Suivant →</button>'}</div>`;
+  o.querySelector('#rl-x').onclick = fermerReleve;
+  o.querySelectorAll('[data-i]').forEach(b => b.onclick = () => { rl.i = +b.dataset.i; dessinerReleve(); });
+  o.querySelector('#rl-prec').onclick = () => { if (rl.i > 0) { rl.i--; dessinerReleve(); } };
+  const s = o.querySelector('#rl-suiv'); if (s) s.onclick = () => { rl.i++; dessinerReleve(); };
+  const f = o.querySelector('#rl-fin'); if (f) f.onclick = () => { rl.p.releve.done = true; sauverReleve(); toast('Relevé enregistré sur la fiche'); fermerReleve(); };
+  dessinerCorpsReleve();
+  const actif = o.querySelector('.rl-etapes .actif'); if (actif) actif.scrollIntoView({ block: 'nearest', inline: 'center' });
+}
+function majAvancement() {
+  if (!rl) return;
+  const p = rl.p, e = etapesReleve(p), pr = $('#rl-prog'); if (pr) pr.style.width = avancementReleve(p) + '%';
+  $('#releve').querySelectorAll('[data-i]').forEach(b => { const x = e[+b.dataset.i]; if (!x) return; const ok = etapeRemplie(p, x.k); b.classList.toggle('fait', ok); b.querySelector('.n').textContent = ok ? '✓' : (+b.dataset.i + 1); });
+}
+function dessinerCorpsReleve() {
+  const p = rl.p, r = p.releve, x = etapesReleve(p)[rl.i], z = $('#rl-corps');
+  let h;
+  if (x.special === 'besoin') {
+    const bs = besoinsDe(p), liste = [...new Set([...listeBesoins(), ...bs])];
+    const blocs = etapesReleve(p).filter(e => e.bloc).map(e => e.nom);
+    h = `<div class="rl-bloc"><span>Besoins du client <span style="color:var(--doux);font-weight:400">(un ou plusieurs)</span></span>
+        <div class="puces">${liste.map(b => `<button class="puce" data-b="${esc(b)}" aria-pressed="${bs.includes(b)}">${esc(b)}</button>`).join('')}</div></div>
+      <div class="rl-bloc" style="background:#eef4fb"><span>Rubriques affichées</span><span style="font-size:15px">${esc(blocs.join(' · '))}</span>
+        <label class="coche"><input type="checkbox" id="rl-tout"${r.tout ? ' checked' : ''}>Afficher toutes les rubriques, quel que soit le besoin</label></div>`;
+  } else if (x.special === 'photos' || x.special === 'croquis') {
+    h = `<div class="rl-gal" id="rl-gal"><p class="sous">Chargement…</p></div>`;
+  } else if (x.special === 'recap') {
+    const rc = r.recap, recap = lignesReleve(p).map(l => l.startsWith('— ') ? `<h4>${esc(l.replace(/—/g, '').trim())}</h4>` : (([a, ...b]) => `<tr><td>${esc(a)}</td><td><b>${esc(b.join(' : '))}</b></td></tr>`)(l.split(' : ')));
+    let tableau = ''; for (const t of recap) tableau += t.startsWith('<h4>') ? (tableau ? '</table>' : '') + t + '<table>' : t; if (tableau) tableau += '</table>';
+    h = `<label class="rl-bloc"><span>Travaux préconisés / observations</span><textarea rows="4" data-r="preconisations" placeholder="Synthèse de la visite, travaux à prévoir, points de vigilance…">${esc(rc.preconisations || '')}</textarea></label>
+      <div class="rl-bloc"><span>Estimation indicative (€ TTC)</span>
+        <div class="grille2"><input data-r="estimBasse" inputmode="decimal" placeholder="Fourchette basse" value="${esc(rc.estimBasse || '')}"><input data-r="estimHaute" inputmode="decimal" placeholder="Fourchette haute" value="${esc(rc.estimHaute || '')}"></div>
+        <span class="sous" style="margin:0">Elle préremplira le montant au moment de « Devis envoyé » et sert au prévisionnel de l’onglet Ventes.</span></div>
+      <div class="rl-bloc"><span>Prochaine étape</span><div class="puces">${['Devis à établir', 'R2 à planifier', 'Sans suite'].map(o => `<button class="puce" data-suite="${o}" aria-pressed="${rc.suite === o}">${o}</button>`).join('')}</div></div>
+      <div class="rl-bloc"><span>Signature du client</span>
+        ${r.signature ? `<img src="${r.signature.src}" alt="Signature" style="max-height:110px;max-width:100%;border:1px solid var(--trait);border-radius:9px;background:#fff;align-self:flex-start"><span class="sous" style="margin:0">Signée le ${esc(new Date(r.signature.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}
+        <div class="ligne-btns"><button class="b2" id="rl-signer">${r.signature ? 'Refaire la signature' : 'Faire signer le client'}</button>${r.signature ? '<button class="b2 danger" id="rl-sign-suppr">Effacer</button>' : ''}</div></div>
+      <div class="rl-bloc rl-recap" style="background:#eef4fb"><span>Récapitulatif</span>${tableau || '<p class="sous" style="margin:0">Rien de saisi dans les rubriques pour l’instant.</p>'}
+        <span class="sous" style="margin:0">${pl(photosReleve(p).length, 'photo')} · ${pl(croquisDe(p).length, 'croquis', 'croquis')}</span></div>
+      <div class="ligne-btns"><button class="b2" id="rl-pdf">Fiche PDF avec le relevé</button></div>`;
+  } else {
+    const d = r[x.k];
+    h = x.champs.map(c => c.t === 'choix'
+      ? `<div class="rl-bloc"><span>${esc(c.nom)}</span><div class="puces">${c.o.map((o, i) => `<button class="puce" data-c="${c.k}" data-o="${i}" aria-pressed="${d[c.k] === o}">${esc(o)}</button>`).join('')}</div></div>`
+      : c.t === 'zone' ? `<label class="rl-bloc"><span>${esc(c.nom)}</span><textarea rows="3" data-t="${c.k}" placeholder="${esc(c.ph || '')}">${esc(d[c.k] || '')}</textarea></label>`
+      : `<label class="rl-bloc"><span>${esc(c.nom)}</span><input data-t="${c.k}" value="${esc(d[c.k] || '')}" placeholder="${esc(c.ph || '')}"${c.mode ? ` inputmode="${c.mode}"` : ''} autocomplete="off"></label>`).join('');
+  }
+  z.innerHTML = `<div><h2>${esc(x.nom)}</h2><p class="sous" style="margin:-6px 0 0">${esc(RELEVE_AIDE[x.k] || '')}</p>${h}</div>`;
+  z.scrollTop = 0;
+  // Branchements
+  if (x.special === 'besoin') {
+    z.querySelectorAll('[data-b]').forEach(b => b.onclick = () => {
+      const v = b.dataset.b, l = besoinsDe(p);
+      p.besoins = l.includes(v) ? l.filter(y => y !== v) : [...l, v]; p.besoinsMaj = maintenant();
+      sauverReleve(); dessinerReleve();
+    });
+    z.querySelector('#rl-tout').onchange = ev => { r.tout = ev.target.checked; sauverReleve(); dessinerReleve(); };
+  } else if (x.special === 'photos' || x.special === 'croquis') {
+    remplirGalerieReleve(x.special);
+  } else if (x.special === 'recap') {
+    z.querySelectorAll('[data-r]').forEach(el => el.oninput = () => { r.recap[el.dataset.r] = el.value; sauverReleve(); majAvancement(); });
+    z.querySelectorAll('[data-suite]').forEach(b => b.onclick = () => {
+      r.recap.suite = r.recap.suite === b.dataset.suite ? '' : b.dataset.suite;
+      z.querySelectorAll('[data-suite]').forEach(y => y.setAttribute('aria-pressed', y.dataset.suite === r.recap.suite));
+      sauverReleve(); majAvancement();
+    });
+    z.querySelector('#rl-signer').onclick = () => ouvrirDessin({ fond: 'blanc', titre: 'Signature du client — signe dans le cadre', signature: true, auValider: async blob => {
+      r.signature = { src: await blobEnDataUrl(blob), date: maintenant() }; sauverReleve(); dessinerCorpsReleve(); majAvancement();
+    } });
+    const se = z.querySelector('#rl-sign-suppr');
+    if (se) se.onclick = () => { if (!se.dataset.ok) { se.dataset.ok = 1; se.textContent = 'Confirmer'; return; } r.signature = null; sauverReleve(); dessinerCorpsReleve(); majAvancement(); };
+    z.querySelector('#rl-pdf').onclick = () => { clearTimeout(rlMinuterie); sauver(); partagerPdfFiche(p); };
+  } else {
+    const d = r[x.k];
+    z.querySelectorAll('[data-c]').forEach(b => b.onclick = () => {
+      const c = x.champs.find(y => y.k === b.dataset.c), o = c.o[+b.dataset.o];
+      d[c.k] = d[c.k] === o ? '' : o;
+      z.querySelectorAll(`[data-c="${c.k}"]`).forEach(y => y.setAttribute('aria-pressed', c.o[+y.dataset.o] === d[c.k]));
+      sauverReleve(); majAvancement();
+    });
+    z.querySelectorAll('[data-t]').forEach(el => el.oninput = () => { d[el.dataset.t] = el.value; sauverReleve(); majAvancement(); });
+  }
+}
+const blobEnDataUrl = blob => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => ko(r.error); r.readAsDataURL(blob); });
+let urlsReleve = [];
+async function remplirGalerieReleve(type) {
+  const p = rl.p, z = $('#rl-gal'); if (!z) return;
+  urlsReleve.splice(0).forEach(u => URL.revokeObjectURL(u));
+  const liste = type === 'croquis' ? croquisDe(p) : photosReleve(p), items = [];
+  for (const x of liste) {
+    const r = await photosDB.lire(x.id).catch(() => null);
+    if (r && r.blob) { const u = URL.createObjectURL(r.blob); urlsReleve.push(u); items.push({ x, u }); }
+  }
+  if (!rl || !z.isConnected) return;
+  const crayon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+  z.innerHTML = items.map(({ x, u }) => `<div class="rl-tuile"><img src="${u}" alt="" data-voir="${x.id}">${x.annotee ? '<small>annotée</small>' : ''}
+      <div class="bt"><button data-dessin="${x.id}">${type === 'croquis' ? 'Modifier' : '✎ Annoter'}</button><button data-voir="${x.id}">Voir</button></div></div>`).join('')
+    + (type === 'croquis'
+      ? `<button class="rl-ajout" id="rl-nouveau">${crayon}Nouveau croquis</button>`
+      : `<button class="rl-ajout" data-ajout="cam">${ICONE_PHOTO}Prendre une photo</button><button class="rl-ajout" data-ajout="lib">${ICONE_PELLICULE}Pellicule</button>`);
+  const ids = items.map(i => i.x.id);
+  z.querySelectorAll('[data-voir]').forEach(b => b.onclick = () => ouvrirPhoto(p, ids, ids.indexOf(b.dataset.voir), () => { remplirGalerieReleve(type); majAvancement(); }));
+  const ajouterPhotos = (nouveaux, extra) => {
+    p.photos = [...(p.photos || []), ...nouveaux.map(id => Object.assign({ id, date: maintenant(), auteur: etat.moi }, extra || {}))];
+    sauverReleve(); remplirGalerieReleve(type); majAvancement();
+  };
+  z.querySelectorAll('[data-ajout]').forEach(b => b.onclick = () => choisirPhoto(b.dataset.ajout, ids2 => { ajouterPhotos(ids2); toast(ids2.length > 1 ? `${ids2.length} photos ajoutées` : 'Photo ajoutée'); }));
+  const nv = z.querySelector('#rl-nouveau');
+  if (nv) nv.onclick = () => ouvrirDessin({ fond: 'grille', titre: 'Croquis à main levée', auValider: async blob => {
+    const id = uid(); await photosDB.mettre(id, { blob, date: maintenant() }); ajouterPhotos([id], { croquis: true }); toast('Croquis ajouté');
+  } });
+  z.querySelectorAll('[data-dessin]').forEach(b => b.onclick = async () => {
+    const x = (p.photos || []).find(y => y.id === b.dataset.dessin), r = await photosDB.lire(x.id).catch(() => null);
+    if (!r || !r.blob) return toast('Image introuvable sur cet appareil');
+    ouvrirDessin({ fond: r.blob, titre: type === 'croquis' ? 'Modifier le croquis' : 'Annoter la photo (l’originale est conservée)', auValider: async blob => {
+      const id = uid(); await photosDB.mettre(id, { blob, date: maintenant() });
+      if (type === 'croquis') { x.supprime = true; x.maj = maintenant(); ajouterPhotos([id], { croquis: true }); }   // le croquis modifié remplace l'ancien
+      else ajouterPhotos([id], { annotee: true, source: x.id });                                                     // la photo annotée s'ajoute à côté de l'originale
+      toast(type === 'croquis' ? 'Croquis modifié' : 'Photo annotée ajoutée');
+    } });
+  });
+}
+
+/* ───────── Dessin : annotation de photo, croquis, signature ───────── */
+let dz = null;
+const DESSIN_COULEURS = ['#d12f2f', '#1f4577', '#2e9a5a', '#f2c230', '#1a2430', '#ffffff'];
+function ouvrirDessin(opts) {
+  let o = $('#dessin');
+  if (!o) { o = document.createElement('div'); o.id = 'dessin'; o.className = 'dessin'; document.body.appendChild(o); }
+  o.hidden = false;
+  const sig = !!opts.signature;
+  o.innerHTML = `<div class="dessin-barre"><span class="t">${esc(opts.titre || 'Dessin')}</span>
+      ${sig ? '' : DESSIN_COULEURS.map((c, i) => `<button class="dessin-coul${i === 0 ? ' on' : ''}" style="background:${c}" data-coul="${c}" aria-label="Couleur"></button>`).join('')}
+      ${sig ? '' : [['trait', 'Trait'], ['fleche', 'Flèche'], ['cadre', 'Cadre']].map(([k, t], i) => `<button class="dessin-btn${i === 0 ? ' on' : ''}" data-outil="${k}">${t}</button>`).join('')}
+      ${sig ? '' : [[3, 'Fin'], [6, 'Moyen'], [11, 'Épais']].map(([n, t], i) => `<button class="dessin-btn${i === 1 ? ' on' : ''}" data-taille="${n}">${t}</button>`).join('')}
+      <button class="dessin-btn" id="dz-annul">Annuler</button><button class="dessin-btn" id="dz-eff">Effacer</button>
+      <button class="dessin-btn" id="dz-ferme">Fermer</button><button class="dessin-btn go" id="dz-ok">Valider</button></div>
+    <div class="dessin-zone" id="dz-zone"><canvas id="dz-cv"></canvas></div>`;
+  dz = { couleur: sig ? '#1a2430' : DESSIN_COULEURS[0], taille: sig ? 3 : 6, outil: 'trait', traits: [], cur: null, fond: opts.fond, img: null, auValider: opts.auValider, sig };
+  o.querySelectorAll('[data-coul]').forEach(b => b.onclick = () => { dz.couleur = b.dataset.coul; o.querySelectorAll('[data-coul]').forEach(y => y.classList.toggle('on', y === b)); });
+  o.querySelectorAll('[data-outil]').forEach(b => b.onclick = () => { dz.outil = b.dataset.outil; o.querySelectorAll('[data-outil]').forEach(y => y.classList.toggle('on', y === b)); });
+  o.querySelectorAll('[data-taille]').forEach(b => b.onclick = () => { dz.taille = +b.dataset.taille; o.querySelectorAll('[data-taille]').forEach(y => y.classList.toggle('on', y === b)); });
+  o.querySelector('#dz-annul').onclick = () => { dz.traits.pop(); peindre(); };
+  o.querySelector('#dz-eff').onclick = () => { dz.traits = []; peindre(); };
+  o.querySelector('#dz-ferme').onclick = fermerDessin;
+  o.querySelector('#dz-ok').onclick = validerDessin;
+  requestAnimationFrame(initDessin);
+}
+function fermerDessin() { const o = $('#dessin'); if (o) o.hidden = true; if (dz && dz.url) URL.revokeObjectURL(dz.url); dz = null; }
+function initDessin() {
+  const cv = $('#dz-cv'), zone = $('#dz-zone'); if (!cv || !dz) return;
+  const W = zone.clientWidth, H = zone.clientHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  Object.assign(dz, { cv, ctx: cv.getContext('2d'), W, H, dpr });
+  dz.ctx.scale(dpr, dpr);
+  if (dz.fond instanceof Blob) {
+    dz.url = URL.createObjectURL(dz.fond);
+    const im = new Image(); im.onload = () => { dz.img = im; const k = Math.min(W / im.naturalWidth, H / im.naturalHeight); dz.cadre = { k, x: (W - im.naturalWidth * k) / 2, y: (H - im.naturalHeight * k) / 2, w: im.naturalWidth * k, h: im.naturalHeight * k }; peindre(); };
+    im.src = dz.url;
+  } else peindre();
+  const pos = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  cv.onpointerdown = e => { e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (_) {} dz.cur = { couleur: dz.couleur, taille: dz.taille, outil: dz.sig ? 'trait' : dz.outil, pts: [pos(e)] }; peindre(); };
+  cv.onpointermove = e => { if (!dz || !dz.cur) return; e.preventDefault(); const q = pos(e); if (dz.cur.outil === 'trait') dz.cur.pts.push(q); else dz.cur.pts[1] = q; peindre(); };
+  cv.onpointerup = cv.onpointercancel = () => { if (!dz || !dz.cur) return; dz.traits.push(dz.cur); dz.cur = null; peindre(); };
+}
+function tracer(ctx, t, k, dx, dy) {   // k, dx, dy : passage de l'écran à l'image finale
+  const P = t.pts.map(q => ({ x: (q.x - dx) * k, y: (q.y - dy) * k }));
+  ctx.strokeStyle = ctx.fillStyle = t.couleur; ctx.lineWidth = t.taille * k; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  if (t.outil === 'trait' || P.length < 2) { P.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); if (P.length === 1) ctx.lineTo(P[0].x + .1, P[0].y + .1); ctx.stroke(); return; }
+  const [a, b] = P;
+  if (t.outil === 'cadre') { ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y)); return; }
+  ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();   // flèche
+  const ang = Math.atan2(b.y - a.y, b.x - a.x), L = Math.max(14, t.taille * 3.2) * k;
+  ctx.beginPath(); ctx.moveTo(b.x, b.y);
+  ctx.lineTo(b.x - L * Math.cos(ang - .45), b.y - L * Math.sin(ang - .45)); ctx.lineTo(b.x - L * Math.cos(ang + .45), b.y - L * Math.sin(ang + .45)); ctx.closePath(); ctx.fill();
+}
+function fondDessin(ctx, W, H, k) {
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  if (dz.fond === 'grille') { ctx.strokeStyle = '#e3e9f0'; ctx.lineWidth = 1 * k; for (let x = 0; x <= W; x += 24 * k) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); } for (let y = 0; y <= H; y += 24 * k) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); } }
+}
+function peindre() {
+  if (!dz || !dz.ctx) return;
+  const { ctx, W, H } = dz;
+  fondDessin(ctx, W, H, 1);
+  if (dz.img && dz.cadre) ctx.drawImage(dz.img, dz.cadre.x, dz.cadre.y, dz.cadre.w, dz.cadre.h);
+  if (dz.sig) { ctx.strokeStyle = '#c9d3de'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(W * .1, H * .7); ctx.lineTo(W * .9, H * .7); ctx.stroke(); }
+  [...dz.traits, ...(dz.cur ? [dz.cur] : [])].forEach(t => tracer(ctx, t, 1, 0, 0));
+}
+function validerDessin() {
+  if (!dz) return;
+  if (dz.sig && !dz.traits.length) return toast('La signature est vide.');
+  let c = document.createElement('canvas'), ctx = c.getContext('2d');
+  if (dz.img && dz.cadre) {   // photo annotée : rendu à la taille de la photo (1600 px max), pas à celle de l'écran
+    const kImg = Math.min(1, 1600 / Math.max(dz.img.naturalWidth, dz.img.naturalHeight));
+    c.width = Math.round(dz.img.naturalWidth * kImg); c.height = Math.round(dz.img.naturalHeight * kImg);
+    ctx.drawImage(dz.img, 0, 0, c.width, c.height);
+    const k = c.width / dz.cadre.w;
+    dz.traits.forEach(t => tracer(ctx, t, k, dz.cadre.x, dz.cadre.y));
+  } else if (dz.sig) {   // signature : recadrée autour du tracé, avec une marge
+    const pts = dz.traits.flatMap(t => t.pts), m = 16;
+    const x0 = Math.max(0, Math.min(...pts.map(q => q.x)) - m), y0 = Math.max(0, Math.min(...pts.map(q => q.y)) - m);
+    const x1 = Math.min(dz.W, Math.max(...pts.map(q => q.x)) + m), y1 = Math.min(dz.H, Math.max(...pts.map(q => q.y)) + m);
+    const k = Math.min(2, 600 / (x1 - x0));
+    c.width = Math.round((x1 - x0) * k); c.height = Math.round((y1 - y0) * k);
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    dz.traits.forEach(t => tracer(ctx, t, k, x0, y0));
+  } else {
+    const k = Math.min(1600, dz.W * dz.dpr) / dz.W;
+    c.width = Math.round(dz.W * k); c.height = Math.round(dz.H * k);
+    fondDessin(ctx, c.width, c.height, k);
+    dz.traits.forEach(t => tracer(ctx, t, k, 0, 0));
+  }
+  const cb = dz.auValider;
+  c.toBlob(b => { fermerDessin(); if (b && cb) cb(b); }, 'image/jpeg', dz.sig ? .7 : .82);
+}
+
+/* ───────── Pré-fiche chantier (PDF pour l'équipe technique, sans montants) ───────── */
+function lignesPrefiche(p) {
+  const s = derniereEtape(p, 'signe') || {}, c = p.contact || {}, r = p.releve || {}, rc = r.recap || {};
+  const L = ['PRÉ-FICHE CHANTIER', `Vendu le ${new Date(s.date || Date.now()).toLocaleDateString('fr-FR', { dateStyle: 'long' })}${s.auteur ? ' par ' + s.auteur : ''}`];
+  L.push(`Client : ${c.nom || nomClient(p) || '–'}`, `Téléphone : ${c.tel || telClient(p) || '–'}`, `Adresse : ${p.horsCarte ? (c.adresseTexte || '–') : p.adresse}`);
+  if (besoinsDe(p).length) L.push(`Besoins : ${texteBesoins(besoinsDe(p))}`);
+  if (refDevis(p)) L.push(`Devis Interfast : ${refDevis(p)}`);
+  if (s.equipe) L.push(`Commentaire commercial : ${s.equipe}`);
+  if (rc.preconisations) L.push(`Préconisations (R1) : ${rc.preconisations}`);
+  L.push(...lignesReleve(p, true));
+  if (!p.horsCarte) L.push(`Itinéraire : ${lienPlans(p)}`);
+  return L;
+}
+async function partagerPrefiche(p) {
+  try {
+    const photos = await imagesPdf(photosDe(p));
+    const nom = `Pre-fiche-chantier-${cleAdresse(nomClient(p) || court(p)).replace(/ /g, '-').slice(0, 40) || 'client'}.pdf`;
+    const f = new File([pdfFiche(p, photos, { lignes: lignesPrefiche(p), titre: 'PRÉ-FICHE CHANTIER' })], nom, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: 'Pré-fiche chantier ' + (nomClient(p) || court(p)) });
+    else { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 30000); }
+  } catch (e) { if (e && e.name !== 'AbortError') toast('PDF impossible : ' + e.message); }
+}
+
 /* ───────── Prévisionnel pondéré, comparatif et origine du CA (ajouts de la copie de test) ───────── */
 // Chance de signer selon l'étape : ton historique dès 5 projets terminés, sinon une valeur par défaut
 const CHANCE_DEFAUT = { r1: 0.20, r2: 0.40, devis: 0.50 };
@@ -3030,7 +3516,7 @@ function htmlPrevisionnel(l, signes, sAn) {
   const limite = Date.now() - 90 * 864e5;   // on ne compte pas les projets endormis depuis plus de 3 mois
   const lignes = [['r1', 'R1'], ['r2', 'R2 (devis à faire)'], ['devis', 'Devis envoyés']].map(([k, nom]) => {
     const ls = l.filter(x => x.et === k && (k === 'devis' || new Date(dateEtapeEnCours(x) || 0) >= limite));
-    const estime = k === 'devis' ? ls.reduce((t, x) => t + ((x.devis && x.devis.montant) || panier), 0) : ls.length * panier;
+    const estime = k === 'devis' ? ls.reduce((t, x) => t + ((x.devis && x.devis.montant) || estimReleve(x.p) || panier), 0) : ls.reduce((t, x) => t + (estimReleve(x.p) || panier), 0);
     const c = chanceDe(l, k);
     return { k, nom, n: ls.length, estime, c, pondere: estime * c.taux };
   }).filter(x => x.n);
@@ -3042,7 +3528,7 @@ function htmlPrevisionnel(l, signes, sAn) {
       ${lignes.map(x => `<div><span>${esc(x.nom)} · ${x.n} × ${pctTxt(x.c.taux)}</span><b>${esc(euros(Math.round(x.pondere)) || '–')}</b></div>`).join('')}
       <div style="border-top:1px solid var(--trait);padding-top:6px"><span><b style="color:inherit">À attendre</b> sur ${esc(euros(Math.round(brut)) || '0 €')} en jeu</span><b>${esc(euros(Math.round(total)) || '0 €')}</b></div>
     </div>
-    <p class="sous" style="margin:-4px 0 0">${panier ? `R1 et R2 estimés au panier moyen (${esc(euros(Math.round(panier)))}). ` : 'Pas encore de signature : R1 et R2 comptent pour 0 €. '}Chances : ${histo && !defaut ? 'calculées sur ton historique' : histo ? 'ton historique quand il y a 5 projets terminés, sinon une valeur par défaut' : 'valeurs par défaut, en attendant 5 projets terminés pour utiliser ton historique'}. Les R1 et R2 de plus de 3 mois ne comptent pas.</p>`;
+    <p class="sous" style="margin:-4px 0 0">R1 et R2 comptés à l’estimation du relevé quand il y en a une, ${panier ? `sinon au panier moyen (${esc(euros(Math.round(panier)))}). ` : 'sinon 0 € tant qu’il n’y a pas de signature. '}Chances : ${histo && !defaut ? 'calculées sur ton historique' : histo ? 'ton historique quand il y a 5 projets terminés, sinon une valeur par défaut' : 'valeurs par défaut, en attendant 5 projets terminés pour utiliser ton historique'}. Les R1 et R2 de plus de 3 mois ne comptent pas.</p>`;
 }
 function htmlComparatif(signes) {
   if (!signes.length) return '';
@@ -3424,7 +3910,7 @@ function fusionner(src) {
     if (p.contact && (!loc.contact || (p.contact.maj || '') > (loc.contact.maj || ''))) {
       Object.assign(loc, { contact: p.contact, adresse: p.adresse, numero: p.numero, rue: p.rue, ville: p.ville, lat: p.lat, lng: p.lng, horsCarte: p.horsCarte });
     }
-    for (const k of ['prepR1', 'prepR2']) if (p[k] && (!loc[k] || (p[k].maj || '') > (loc[k].maj || ''))) loc[k] = p[k];
+    for (const k of ['prepR1', 'prepR2', 'releve']) if (p[k] && (!loc[k] || (p[k].maj || '') > (loc[k].maj || ''))) loc[k] = p[k];
     if (p.besoins && (p.besoinsMaj || '') > (loc.besoinsMaj || '')) { loc.besoins = p.besoins; loc.besoinsMaj = p.besoinsMaj; }
     for (const ch of ['smsR1', 'smsR2', 'rappelR1', 'rappelR2']) if (p[ch] && (!loc[ch] || (p[ch].maj || '') > (loc[ch].maj || ''))) loc[ch] = p[ch];
     if (p.smsAnciennes) loc.smsAnciennes = [...new Set([...(loc.smsAnciennes || []), ...p.smsAnciennes])];
