@@ -334,8 +334,8 @@ tbody tr:hover{background:var(--bleu-pale);}
 .who{display:inline-flex;align-items:center;gap:9px;}
 
 /* ── Pipeline Kanban ── */
-.kanban{display:flex;gap:13px;overflow-x:auto;padding-bottom:10px;}
-.kb-col{flex:0 0 272px;background:var(--nuage);border:1px solid var(--trait);border-radius:var(--r-m);display:flex;flex-direction:column;max-height:72vh;}
+.kanban{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:13px;align-items:start;padding-bottom:10px;}
+.kb-col{min-width:0;background:var(--nuage);border:1px solid var(--trait);border-radius:var(--r-m);display:flex;flex-direction:column;}
 .kb-col-hd{padding:12px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--trait);position:sticky;top:0;background:var(--nuage);border-radius:var(--r-m) var(--r-m) 0 0;}
 .kb-col-hd .tag{width:9px;height:9px;border-radius:3px;flex-shrink:0;}
 .kb-col-hd b{font-size:12.5px;font-weight:600;flex:1;}
@@ -349,6 +349,7 @@ tbody tr:hover{background:var(--bleu-pale);}
 .kb-card-amt{font-size:12px;font-weight:700;color:var(--bleu);white-space:nowrap;}
 .kb-card-meta{font-size:11.5px;color:var(--gris);margin-top:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .kb-col.dragover .kb-col-bd{background:var(--bleu-pale);outline:2px dashed var(--bleu);outline-offset:-6px;border-radius:var(--r-s);}
+@media (max-width:560px){.kanban{grid-template-columns:1fr;gap:10px;}.kb-col.vide .kb-col-bd{display:none;}.kb-col.vide .kb-col-hd{border-bottom:0;border-radius:var(--r-m);}}
 
 /* ── Empty state ── */
 .empty{text-align:center;padding:48px 20px;color:var(--gris);}
@@ -2769,7 +2770,7 @@ function createChantierFromLead(l,comment){
 ═══════════════════════════════════════════════════════════ */
 VIEWS.pipeline=function(){
   return `<div class="toolbar">
-    <div class="muted" style="font-size:13px">Glissez une carte d'une colonne à l'autre pour changer son étape.</div>
+    <div class="muted" style="font-size:13px">${matchMedia('(hover:none)').matches?'Touchez un prospect pour l’ouvrir et changer son étape.':'Glissez une carte d’une colonne à l’autre pour changer son étape.'}</div>
     <div style="margin-left:auto" class="flex gap">
       ${session.role==='direction'?`<button class="btn btn-outline btn-sm" onclick="go('reglages')">Gérer les étapes</button>`:''}
       <button class="btn btn-primary btn-sm" onclick="openLeadForm()">+ Nouveau prospect</button>
@@ -2827,7 +2828,7 @@ function renderPipeline(){
   box.innerHTML=cols.map(s=>{
     const items=list.filter(l=>l.stage===s.key);
     const total=items.reduce((a,l)=>a+(l.montant||0),0);
-    return `<div class="kb-col" data-stage="${s.key}"
+    return `<div class="kb-col${items.length?'':' vide'}" data-stage="${s.key}"
         ondragover="kbDragOver(event,this)" ondragleave="this.classList.remove('dragover')" ondrop="kbDrop(event,this)">
       <div class="kb-col-hd"><span class="tag" style="background:${s.color}"></span><b>${esc(s.label)}</b><span class="ct">${items.length}</span></div>
       <div class="kb-col-bd">
