@@ -583,7 +583,15 @@ tbody tr:hover{background:var(--bleu-pale);}
 .mj-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;}
 .mj-alerte{font-size:12.5px;color:var(--ambre);font-weight:600;}
 /* ─── Prospection terrain (carte intégrée) ─── */
-.prosp-cadre{display:none;flex:1;height:calc(100vh - 60px);height:calc(100dvh - 60px);}
+.prosp-cadre{display:none;flex:1;height:calc(100vh - 112px);height:calc(100dvh - 112px);}
+/* Onglets internes de « Mes prospects » : Liste | Pipeline | Carte */
+.vue-onglets{display:none;height:52px;align-items:center;padding:0 26px;background:var(--blanc);border-bottom:1px solid var(--trait);}
+.vue-onglets.show{display:flex;}
+.seg{display:inline-flex;background:var(--nuage);border:1px solid var(--trait);border-radius:10px;padding:3px;gap:2px;}
+.seg button{border:0;background:transparent;font:inherit;font-size:13px;font-weight:600;color:var(--gris);padding:7px 16px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:6px;}
+.seg button.on{background:var(--blanc);color:var(--bleu);box-shadow:0 1px 3px rgba(10,30,50,.12);}
+.seg button .n{font-size:11px;font-weight:700;color:var(--gris);background:var(--nuage);border-radius:8px;padding:0 6px;}
+@media (max-width:768px){.vue-onglets{padding:0 15px;}.seg{width:100%;}.seg button{flex:1;justify-content:center;padding:7px 6px;}}
 .prosp-cadre iframe{display:block;width:100%;height:100%;border:0;}
 .test-badge{position:fixed;top:6px;right:10px;z-index:300;background:#b4501c;color:#fff;font:700 11px/1 system-ui;padding:4px 10px;border-radius:999px;pointer-events:none;letter-spacing:.06em;opacity:.92}
 /* ─── Photos chantier ─── */
@@ -694,6 +702,7 @@ tbody tr:hover{background:var(--bleu-pale);}
       </div>
       <div class="tb-actions" id="tb-actions"></div>
     </header>
+    <div class="vue-onglets" id="vue-onglets"></div>
     <div class="content" id="content"></div>
   </div>
 </div>
@@ -739,9 +748,7 @@ const NAV={
     {id:'dashboard', label:'Tableau de bord'},
     {id:'tresorerie',label:'Trésorerie'},
     {cat:'Commercial'},
-    {id:'prospection',label:'Prospection terrain'},
-    {id:'leads',     label:'Prospects'},
-    {id:'pipeline',  label:'Pipeline'},
+    {id:'prospects', label:'Prospects'},
     {id:'ventes',    label:'Ventes signées'},
     {id:'agenda',    label:'Agenda'},
     {cat:'Chantiers'},
@@ -754,9 +761,7 @@ const NAV={
   commercial:[
     {cat:'Mon activité'},
     {id:'dashboard', label:'Mon tableau de bord'},
-    {id:'prospection',label:'Prospection terrain'},
-    {id:'leads',     label:'Mes prospects'},
-    {id:'pipeline',  label:'Mon pipeline'},
+    {id:'prospects', label:'Mes prospects'},
     {id:'ventes',    label:'Mes ventes'},
     {id:'agenda',    label:'Mon agenda'},
   ],
@@ -1253,6 +1258,7 @@ function loginAs(role,name,email,id){
 
 function doLogout(){
   const cadre=document.getElementById('prospection-cadre');if(cadre)cadre.remove();
+  majOngletsProspects(null);
   session=null;
   document.getElementById('app').classList.remove('active');
   document.getElementById('screen-login').classList.add('active');
@@ -1282,11 +1288,26 @@ function toggleSidebar(open){
 /* ─────────── Routeur de vues ─────────── */
 let _currentView=null;
 function currentView(){return _currentView;}
+/* « Mes prospects » regroupe trois vues des mêmes clients : la liste, le pipeline et la carte (prospection terrain) */
+const VUES_PROSPECTS=[['leads','Liste'],['pipeline','Pipeline'],['prospection','Carte']];
+const CLE_VUE_PROSP=STORE_KEY+'_vueProspects';
+function vueProspects(){let v='';try{v=localStorage.getItem(CLE_VUE_PROSP)||'';}catch(e){}return VUES_PROSPECTS.some(x=>x[0]===v)?v:'leads';}
+function majOngletsProspects(viewId){
+  const bar=document.getElementById('vue-onglets');if(!bar)return;
+  const dedans=VUES_PROSPECTS.some(x=>x[0]===viewId);
+  bar.classList.toggle('show',dedans);
+  if(!dedans){bar.innerHTML='';return;}
+  try{localStorage.setItem(CLE_VUE_PROSP,viewId);}catch(e){}
+  bar.innerHTML=`<div class="seg" role="tablist">${VUES_PROSPECTS.map(([k,t])=>`<button role="tab" class="${k===viewId?'on':''}" onclick="go('${k}')">${t}</button>`).join('')}</div>`;
+}
 function go(viewId){
+  if(viewId==='prospects')viewId=vueProspects();
   _currentView=viewId;
-  document.querySelectorAll('.sb-item').forEach(el=>el.classList.toggle('active',el.dataset.view===viewId));
-  const nav=NAV[session.role].find(x=>x.id===viewId);
+  const navId=VUES_PROSPECTS.some(x=>x[0]===viewId)?'prospects':viewId;
+  document.querySelectorAll('.sb-item').forEach(el=>el.classList.toggle('active',el.dataset.view===navId));
+  const nav=NAV[session.role].find(x=>x.id===navId);
   document.getElementById('tb-title').textContent=nav?nav.label:'';
+  majOngletsProspects(viewId);
   document.getElementById('tb-actions').innerHTML='';
   const c=document.getElementById('content');
   c.style.display=viewId==='prospection'?'none':'';
@@ -4260,6 +4281,7 @@ document.getElementById('modal-bd').addEventListener('click',e=>{if(e.target.id=
    Ses intéressés, prospects de salon et R1 deviennent des prospects ici (avec le RDV R1 dans l'agenda) ;
    la suite (R2, devis, signature) se gère dans la plateforme et se voit sur la carte.
 ═══════════════════════════════════════════════════════════ */
+SVG.prospects=SVG.leads;
 SVG.prospection='<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>';
 function stpCadre(afficher){
   let cadre=document.getElementById('prospection-cadre');
