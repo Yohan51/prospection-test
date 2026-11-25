@@ -955,15 +955,108 @@ function realCharges(regime){
 }
 /* Journal d'activité */
 let JOURNAL=[];
-let SEQ={lead:1, rdv:1, chantier:1, charge:1, enc:1};
 let DASH={}; /* configuration du tableau de bord par rôle : {role:[widgetId,...]} */
+
+/* ═══════════════════════════════════════════════════════════
+   ENREGISTREMENT (prêt pour la synchro)
+   1. Identifiants uniques entre appareils : horodatage en µs + hasard (plus de 1, 2, 3…).
+   2. Chaque fiche modifiée reçoit maj (date) et majPar ; une fiche supprimée laisse une trace dans SUPPR.
+   3. Les photos (data:image…) sont rangées à part dans IndexedDB ; les données ne gardent qu'une
+      référence « idb:… ». En mémoire et à l'écran, rien ne change : les images sont rechargées au démarrage.
+═══════════════════════════════════════════════════════════ */
+let _dernierId=0;
+function nouvelId(){let n=Date.now()*1000+Math.floor(Math.random()*1000);if(n<=_dernierId)n=_dernierId+1;_dernierId=n;return n;}
+const SEQ={};['lead','rdv','chantier','charge','enc'].forEach(k=>Object.defineProperty(SEQ,k,{get:nouvelId,set(){},enumerable:true}));
+let SUPPR=[];      /* [{col,id,maj,par}] fiches supprimées */
+let MAJ_GLOBAL={}; /* {PILOTAGE,DASH,STAGES : date de dernière modification} */
+let MIGR={};       /* anciens numéros → nouveaux identifiants, par collection */
+const COLS={LEADS:()=>LEADS,RDVS:()=>RDVS,CHANTIERS:()=>CHANTIERS,CHARGES:()=>CHARGES,ENCAISSEMENTS:()=>ENCAISSEMENTS,TEAM:()=>TEAM};
+const GLOBAUX={PILOTAGE:()=>PILOTAGE,DASH:()=>DASH,STAGES:()=>STAGES};
+
+/* ── Photos dans IndexedDB ── */
+const PHOTO_DB=STORE_KEY+'_photos';
+let _photoDb=null;
+function photoDb(){
+  if(_photoDb)return _photoDb;
+  _photoDb=new Promise((ok,ko)=>{const r=indexedDB.open(PHOTO_DB,1);r.onupgradeneeded=()=>r.result.createObjectStore('p');r.onsuccess=()=>ok(r.result);r.onerror=()=>ko(r.error);});
+  return _photoDb;
+}
+const _photoIds=new Map();   /* dataURL → id */
+const _photoData=new Map();  /* id → dataURL */
+function hashTxt(s){let h1=0xdeadbeef,h2=0x41c6ce57;for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);h1=Math.imul(h1^c,2654435761);h2=Math.imul(h2^c,1597334677);}
+  h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);
+  return (h2>>>0).toString(36)+(h1>>>0).toString(36)+s.length.toString(36);}
+function refPhoto(data){
+  let id=_photoIds.get(data);
+  if(!id){
+    id='ph'+hashTxt(data);_photoIds.set(data,id);
+    if(!_photoData.has(id)){_photoData.set(id,data);photoDb().then(db=>{const t=db.transaction('p','readwrite');t.objectStore('p').put(data,id);}).catch(e=>console.warn('photo',e));}
+  }
+  return 'idb:'+id;
+}
+const remplPhotos=(k,v)=>typeof v==='string'&&v.length>300&&v.startsWith('data:image/')?refPhoto(v):v;
+/* Au chargement : remet les images à la place des références, et range celles qui ne le sont pas encore */
+async function chargerPhotos(){
+  let db;try{db=await photoDb();}catch(e){console.warn('photos indisponibles',e);return;}
+  const tout=await new Promise(ok=>{const out=new Map(),t=db.transaction('p','readonly'),c=t.objectStore('p').openCursor();
+    c.onsuccess=()=>{const cur=c.result;if(cur){out.set(cur.key,cur.value);cur.continue();}else ok(out);};c.onerror=()=>ok(out);});
+  const vus=new Set();
+  const marcher=o=>{
+    if(Array.isArray(o)){for(let i=0;i<o.length;i++){const v=o[i];if(typeof v==='string'){if(v.startsWith('idb:')){const id=v.slice(4);vus.add(id);const d=tout.get(id);if(d){o[i]=d;_photoIds.set(d,id);_photoData.set(id,d);}}}else if(v&&typeof v==='object')marcher(v);}}
+    else if(o&&typeof o==='object'){for(const k in o){const v=o[k];if(typeof v==='string'){if(v.startsWith('idb:')){const id=v.slice(4);vus.add(id);const d=tout.get(id);if(d){o[k]=d;_photoIds.set(d,id);_photoData.set(id,d);}}}else if(v&&typeof v==='object')marcher(v);}}
+  };
+  [LEADS,RDVS,CHANTIERS,TEAM].forEach(marcher);
+  /* Ménage : images qui ne sont plus utilisées nulle part */
+  const orphelines=[...tout.keys()].filter(id=>!vus.has(id));
+  if(orphelines.length){const t=db.transaction('p','readwrite');orphelines.forEach(id=>t.objectStore('p').delete(id));}
+}
+
+/* ── Empreintes : repérer ce qui a changé depuis le dernier enregistrement ── */
+let _empreintes=null;
+function texteFiche(r){const {maj,majPar,...rest}=r;return JSON.stringify(rest,remplPhotos);}
+function suivreChangements(marquer){
+  const now=Date.now(),qui=session?session.id:'',nouv={};
+  for(const col in COLS){
+    nouv[col]={};
+    for(const r of COLS[col]()){
+      if(r==null||r.id==null)continue;
+      const t=texteFiche(r);nouv[col][r.id]=t;
+      if(marquer&&_empreintes&&_empreintes[col]&&_empreintes[col][r.id]!==t){r.maj=now;r.majPar=qui;}
+    }
+    if(marquer&&_empreintes&&_empreintes[col])for(const id in _empreintes[col])if(!(id in nouv[col])){
+      SUPPR=SUPPR.filter(s=>!(s.col===col&&String(s.id)===id));SUPPR.push({col,id:isNaN(+id)?id:+id,maj:now,par:qui});
+    }
+  }
+  for(const g in GLOBAUX){const t=JSON.stringify(GLOBAUX[g]());nouv['$'+g]=t;if(marquer&&_empreintes&&_empreintes['$'+g]!==t)MAJ_GLOBAL[g]=now;}
+  if(SUPPR.length>2000)SUPPR=SUPPR.slice(-2000);
+  _empreintes=nouv;
+}
+function oublierEmpreintes(){_empreintes=null;}
+
+/* ── Anciens numéros (1, 2, 3…) → identifiants uniques, références comprises ── */
+function migrerIds(){
+  const estAncien=id=>typeof id==='number'&&id<1e12;
+  const m={LEADS:{},RDVS:{},CHANTIERS:{},CHARGES:{},ENCAISSEMENTS:{}};let n=0;
+  for(const col in m)for(const r of COLS[col]())if(r&&estAncien(r.id)){const nv=nouvelId();m[col][r.id]=nv;r.id=nv;n++;}
+  if(!n)return false;
+  const map=(col,v)=>v!=null&&m[col][v]!=null?m[col][v]:v;
+  RDVS.forEach(r=>r.leadId=map('LEADS',r.leadId));
+  CHANTIERS.forEach(c=>c.leadId=map('LEADS',c.leadId));
+  ENCAISSEMENTS.forEach(e=>e.chantierId=map('CHANTIERS',e.chantierId));
+  /* Montants des charges mois par mois (clés = identifiant de charge) */
+  for(const an in PILOTAGE){const ex=PILOTAGE[an];if(ex&&Array.isArray(ex.chargesMois))ex.chargesMois=ex.chargesMois.map(cm=>{const o={};for(const k in cm)o[m.CHARGES[k]!=null?String(m.CHARGES[k]):k]=cm[k];return o;});}
+  for(const col in m){MIGR[col]=Object.assign({},MIGR[col]);for(const k in m[col])MIGR[col][k]=m[col][k];}
+  return true;
+}
 
 /* ─────────── Persistance locale ─────────── */
 let _demoRolesMigrated=false;
 function saveStore(){
   try{
-    localStorage.setItem(STORE_KEY,JSON.stringify({TEAM,LEADS,RDVS,CHANTIERS,CHARGES,ENCAISSEMENTS,PILOTAGE,JOURNAL,STAGES,SEQ,DASH,v:2,_demoRolesV2:_demoRolesMigrated}));
-  }catch(e){console.warn('save',e);}
+    suivreChangements(true);
+    const cols={};for(const col in COLS)cols[col]=COLS[col]().map(r=>r);
+    localStorage.setItem(STORE_KEY,JSON.stringify(Object.assign(cols,{PILOTAGE,JOURNAL,STAGES,DASH,SUPPR,MAJ_GLOBAL,MIGR,v:3,_demoRolesV2:_demoRolesMigrated}),remplPhotos));
+  }catch(e){console.warn('save',e);toast('Enregistrement impossible : mémoire de l’appareil pleine ?','⚠️');}
 }
 function loadStore(){
   try{
@@ -975,7 +1068,7 @@ function loadStore(){
     if(Array.isArray(d.STAGES)&&d.STAGES.length)STAGES=d.STAGES;
     if(d.PILOTAGE&&typeof d.PILOTAGE==='object')PILOTAGE=d.PILOTAGE;
     if(d.DASH&&typeof d.DASH==='object')DASH=d.DASH;
-    SEQ=d.SEQ||SEQ;
+    SUPPR=Array.isArray(d.SUPPR)?d.SUPPR:[];MAJ_GLOBAL=d.MAJ_GLOBAL||{};MIGR=d.MIGR||{};
     migrateDemoRoles(d);
     return true;
   }catch(e){return false;}
@@ -1031,7 +1124,7 @@ const DEMO_TEAM=[
 function seedDemo(){
   TEAM=DEMO_TEAM.map(m=>({...m}));
   const today=new Date();
-  const d=(off)=>{const x=new Date(today);x.setDate(x.getDate()+off);return x.toISOString().slice(0,10);};
+  const d=(off)=>{const x=new Date(today);x.setDate(x.getDate()+off);return isoLocal(x);};
 
   LEADS=[
     {id:SEQ.lead++, nom:'Martin Lefèvre',   tel:'06 12 34 56 78', email:'m.lefevre@email.fr', adresse:'14 rue des Vignes', cp:'51000', ville:'Châlons-en-Champagne', lat:48.9568, lng:4.3637, prestation:'nettoyage', montant:1800, stage:'r1_plan',  source:'facebook', commercialId:'yohan',  notes:'Toiture nord très encrassée, mousses importantes.', createdAt:d(-12)},
@@ -1071,7 +1164,7 @@ function seedDemo(){
   /* Encaissements : trésorerie de départ + CA récent */
   ENCAISSEMENTS=[
     {id:SEQ.enc++, libelle:'Trésorerie de départ (début exercice)', montant:0, date:d(-20), type:'depart', statut:'encaisse', chantierId:null},
-    {id:SEQ.enc++, libelle:'Chantier Dubois — acompte', montant:750, date:d(-2), type:'chantier', statut:'encaisse', chantierId:1},
+    {id:SEQ.enc++, libelle:'Chantier Dubois — acompte', montant:750, date:d(-2), type:'chantier', statut:'encaisse', chantierId:CHANTIERS[0].id},
   ];
 
   STAGES=JSON.parse(JSON.stringify(STAGES_DEFAULT));
@@ -1098,9 +1191,14 @@ function seedDemo(){
 }
 
 /* ─────────── Démarrage ─────────── */
-function boot(){
+async function boot(){
   document.querySelectorAll('img[data-logo]').forEach(i=>i.src=LOGO_URI);
   if(!loadStore()||!TEAM.length){seedDemo();}
+  else await chargerPhotos();
+  const migre=migrerIds();
+  suivreChangements(false);
+  if(migre||!localStorage.getItem(STORE_KEY))saveStore();
+  else{try{if(JSON.parse(localStorage.getItem(STORE_KEY)).v!==3)saveStore();}catch(e){}}
   renderRoleGrid();
 }
 
@@ -1380,7 +1478,7 @@ function wPrevisionnel(){
     return `<tr><td>${esc(s.label)}</td><td class="right muted">${p}%</td><td class="right money">${fmtMoney(brut)}</td><td class="right money">${fmtMoney(pond)}</td></tr>`;
   }).join('');
   const body=leads.length?`<div class="tbl-wrap"><table>
-    <thead><tr><th>Étape</th><th class="right">Proba</th><th class="right">Montant</th><th class="right">Pondéré</th></tr></thead>
+    <thead><tr><th>Étape</th><th class="right">Proba</th><th class="right">Montant HT</th><th class="right">Pondéré</th></tr></thead>
     <tbody>${rows}</tbody>
     <tfoot><tr style="border-top:2px solid var(--trait-fort);font-weight:700"><td>Prévisionnel attendu</td><td></td><td class="right money">${fmtMoney(totBrut)}</td><td class="right money" style="color:var(--vert)">${fmtMoney(totPond)}</td></tr></tfoot>
     </table></div>`:emptyMini('Aucune affaire en cours.');
@@ -1700,7 +1798,7 @@ function journalList(n){
 /* Mini-table de leads (dashboard) */
 function leadsMiniTable(list){
   if(!list.length)return emptyMini('Rien à afficher.');
-  return `<div class="tbl-wrap"><table><thead><tr><th>Prospect</th><th>Prestation</th><th class="right">Montant</th><th>Étape</th></tr></thead><tbody>
+  return `<div class="tbl-wrap"><table><thead><tr><th>Prospect</th><th>Prestation</th><th class="right">Montant HT</th><th>Étape</th></tr></thead><tbody>
     ${list.map(l=>`<tr onclick="openLeadDetail(${l.id})" style="cursor:pointer">
       <td><div class="t-main">${esc(l.nom)}</div><div class="t-sub">${esc(l.ville)}</div></td>
       <td>${prestDot(l.prestation)}${esc(prest(l.prestation).label)}</td>
@@ -1737,7 +1835,7 @@ function renderLeadsTable(){
   if(!list.length){box.innerHTML=`<div class="empty"><div class="em-ic">${icon('pipeline',40)}</div><b>Aucun prospect</b><p>Ajoutez votre premier prospect pour démarrer le suivi commercial.</p><button class="btn btn-primary" onclick="openLeadForm()">+ Nouveau prospect</button></div>`;return;}
   const showCom=session.role==='direction';
   box.innerHTML=`<div class="tbl-wrap"><table><thead><tr>
-    <th>Prospect</th><th>Prestation</th><th class="right">Montant</th><th>Étape</th>
+    <th>Prospect</th><th>Prestation</th><th class="right">Montant HT</th><th>Étape</th>
     ${showCom?'<th>Commercial</th>':''}<th>Source</th><th></th></tr></thead><tbody>
     ${list.map(l=>{
       return `<tr onclick="openLeadDetail(${l.id})" style="cursor:pointer">
@@ -1787,7 +1885,7 @@ function openLeadForm(editId){
     </div>
     <div class="form-row">
       <div class="field"><label>Prestation souhaitée</label><select id="lf-prestation">${PRESTATIONS.map(p=>`<option value="${p.key}" ${l&&l.prestation===p.key?'selected':''}>${esc(p.label)}</option>`).join('')}</select></div>
-      <div class="field"><label>Montant estimé (€)</label><input id="lf-montant" type="number" value="${l?l.montant||'':''}" placeholder="0"></div>
+      <div class="field"><label>Montant estimé HT (€)</label><input id="lf-montant" type="number" value="${l?l.montant||'':''}" placeholder="0"></div>
     </div>
     <div class="field"><label>Source</label><select id="lf-source">${SOURCES.map(s=>`<option value="${s.key}" ${l&&l.source===s.key?'selected':''}>${esc(s.label)}</option>`).join('')}</select></div>
     <div class="form-row">
@@ -1867,7 +1965,7 @@ function openLeadDetail(id){
     </div>
     <div class="grid-2" style="gap:14px">
       <div class="field"><label>Changer d'étape</label><select onchange="changeStage(${l.id},this.value)">${stageOpts}</select></div>
-      <div class="field"><label>Montant</label><input type="number" value="${l.montant||0}" onchange="updateLeadField(${l.id},'montant',parseFloat(this.value)||0)"></div>
+      <div class="field"><label>Montant HT (€)</label><input type="number" value="${l.montantHT||l.montant||0}" onchange="updateLeadField(${l.id},'montant',parseFloat(this.value)||0);if(LEADS.find(x=>x.id===${l.id}).stage==='signe')updateLeadField(${l.id},'montantHT',parseFloat(this.value)||0)"></div>
     </div>
     <div class="sec-lbl" style="margin-top:8px">Coordonnées</div>
     <div class="tbl-wrap"><table><tbody>
@@ -2426,7 +2524,7 @@ function confirmSign(id){
   const ref=val('sg-ref').trim();const ht=parseFloat(val('sg-ht'))||0;
   if(!ref){toast('La référence Interfast est obligatoire.','⚠️');return;}
   if(!ht){toast('Le montant HT est obligatoire.','⚠️');return;}
-  l.interfastRef=ref;l.montantHT=ht;l.devisDate=val('sg-date');
+  l.interfastRef=ref;l.montantHT=ht;l.montant=ht;l.devisDate=val('sg-date');
   const comment=val('sg-comment').trim();l.signComment=comment;
   l.stage='signe';l.signedAt=todayISO();
   logAct('Dossier signé — '+fmtMoney(ht),l.nom);
@@ -3135,7 +3233,7 @@ VIEWS['mes-chantiers']=function(){
 let _weekStart=null;
 function mondayOf(d){const x=new Date(d);const day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);x.setHours(0,0,0,0);return x;}
 function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x;}
-function isoOf(d){return d.toISOString().slice(0,10);}
+function isoOf(d){return isoLocal(d);}
 function sameWeekLabel(start){const end=addDays(start,6);const f={day:'numeric',month:'short'};return start.toLocaleDateString('fr-FR',f)+' – '+end.toLocaleDateString('fr-FR',f);}
 function chantierCoversDay(c,isoDay){if(!c.dateDebut)return false;const dur=Math.max(1,Math.ceil(c.dureeEstimee||1));const start=new Date(c.dateDebut+'T00:00');for(let k=0;k<dur;k++){if(isoOf(addDays(start,k))===isoDay)return true;}return false;}
 function dayIndexInChantier(c,isoDay){const start=new Date(c.dateDebut+'T00:00');const diff=Math.round((new Date(isoDay+'T00:00')-start)/86400000);return diff+1;}
@@ -3824,7 +3922,7 @@ function deleteStage(key){
 }
 function exportData(){
   /* sauvegarde complète : identique à ce qui est stocké (dont PILOTAGE = trésorerie) */
-  const blob=JSON.stringify({TEAM,LEADS,RDVS,CHANTIERS,CHARGES,ENCAISSEMENTS,PILOTAGE,JOURNAL,STAGES,SEQ,DASH,v:2},null,2);
+  const blob=JSON.stringify({TEAM,LEADS,RDVS,CHANTIERS,CHARGES,ENCAISSEMENTS,PILOTAGE,JOURNAL,STAGES,DASH,SUPPR,MAJ_GLOBAL,MIGR,v:3},null,2);
   const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(blob);
   a.download='sublime-toit-sauvegarde-'+todayISO()+'.json';document.body.appendChild(a);a.click();a.remove();
   toast('Sauvegarde téléchargée (CRM + trésorerie).');
@@ -3842,9 +3940,10 @@ function importData(input){
         if(Array.isArray(d.STAGES)&&d.STAGES.length)STAGES=d.STAGES;
         if(d.PILOTAGE&&typeof d.PILOTAGE==='object')PILOTAGE=d.PILOTAGE; else PILOTAGE={};
         if(d.DASH&&typeof d.DASH==='object')DASH=d.DASH;
-        if(d.SEQ)SEQ=d.SEQ;
-        saveStore();logAct('Sauvegarde importée',file.name);
-        toast('Sauvegarde importée.');go(NAV[session.role].find(x=>x.id).id);
+        SUPPR=[];MAJ_GLOBAL={};
+        chargerPhotos().catch(()=>{}).then(()=>{migrerIds();oublierEmpreintes();suivreChangements(false);saveStore();logAct('Sauvegarde importée',file.name);saveStore();
+          toast('Sauvegarde importée.');go(NAV[session.role].find(x=>x.id).id);});
+        return;
       }catch(err){toast('Import impossible : '+err.message);}
     },'Importer');
     input.value='';
@@ -3853,7 +3952,7 @@ function importData(input){
 }
 function resetData(){
   confirmModal('Réinitialiser les données','Toutes les données seront remplacées par la démo. Cette action est irréversible.',()=>{
-    localStorage.removeItem(STORE_KEY);seedDemo();toast('Données réinitialisées.','🔄');go(NAV[session.role].find(x=>x.id).id);
+    localStorage.removeItem(STORE_KEY);SUPPR=[];MAJ_GLOBAL={};oublierEmpreintes();seedDemo();suivreChangements(false);saveStore();toast('Données réinitialisées.','🔄');go(NAV[session.role].find(x=>x.id).id);
   },'Réinitialiser',true);
 }
 
@@ -3868,7 +3967,8 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;',
 function initials(n){return String(n||'?').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();}
 function titleCase(n){return String(n||'').split(/\s+/).map(w=>w?w[0].toUpperCase()+w.slice(1):'').join(' ');}
 function fmtMoney(n){return (Math.round(n||0)).toLocaleString('fr-FR')+' €';}
-function todayISO(){return new Date().toISOString().slice(0,10);}
+function isoLocal(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function todayISO(){return isoLocal(new Date());}
 function fmtDate(iso){if(!iso)return'—';const d=new Date(iso+(iso.length<=10?'T00:00':''));return isNaN(d)?iso:d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});}
 function fmtDateShort(iso){if(!iso)return'—';const d=new Date(iso+(iso.length<=10?'T00:00':''));return isNaN(d)?iso:d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});}
 function fmtDateTime(ts){const d=new Date(ts);return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
@@ -3978,8 +4078,9 @@ window.STP={
       const sv=d.suivi;
       if(sv&&sv.etape){
         l.stage={r1:'r1_fait',r2:'r2_plan',devis:'devis',signe:'signe',perdu:'perdu'}[sv.etape]||l.stage;
-        if(sv.montant)l.montant=sv.montant;
-        if(sv.etape==='signe'){l.signedAt=String(sv.date||'').slice(0,10)||todayISO();l.montantHT=Math.round((sv.montant||0)/1.1);}
+        /* La carte notait ses montants en TTC : convertis en HT (TVA 10 %, rénovation) */
+        if(sv.montant)l.montant=Math.round(sv.montant/1.1);
+        if(sv.etape==='signe'){l.signedAt=String(sv.date||'').slice(0,10)||todayISO();l.montantHT=l.montant||0;}
         if(sv.etape==='perdu')l.lostReason=sv.raison||'Perdu';
       }
       LEADS.push(l);logAct('Prospect créé depuis la carte',l.nom);
@@ -4015,6 +4116,9 @@ window.STP={
         adresse:[l.adresse,l.cp,l.ville].filter(Boolean).join(' '),lat:l.lat||null,lng:l.lng||null};
     });
   },
+  montantHT(leadId){const l=LEADS.find(x=>x.id===leadId);return l?(l.montantHT||l.montant||0):0;},
+  leadDePorte(porteId){const l=LEADS.find(x=>x.porteId===porteId);return l?l.id:null;},
+  idMigre(col,id){const m=MIGR[col];return m&&m[id]!=null?m[id]:id;},
   ouvrirLead(id){if(LEADS.some(x=>x.id===id))openLeadDetail(id);else toast('Prospect introuvable dans la plateforme.');},
   ouvrirFicheR1(id){if(LEADS.some(x=>x.id===id))openR1(id);},
   ouvrirChantier(id){if(CHANTIERS.some(x=>x.id===id))openChantierDetail(id);},

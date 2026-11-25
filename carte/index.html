@@ -503,6 +503,16 @@ const RAYONS = [200, 300, 500, 800];
 const vide = () => ({ version: 1, moi: '', chantiers: [], portes: [], rues: {} });
 let etat = charger();
 if (PF) { try { const m = PF.moi(); if (m && m.prenom) etat.moi = m.prenom; } catch (e) {} }
+// Dans la plateforme : prospects et chantiers recalés sur les identifiants actuels (après migration)
+function recalerPlateforme() {
+  if (!PF) return;
+  try {
+    let change = false;
+    for (const p of etat.portes) if (p.leadId) { const id = PF.leadDePorte(p.id); if (id !== p.leadId) { if (id) p.leadId = id; else delete p.leadId; delete p._pf; change = true; } }
+    for (const k of ['pfMasques', 'pfRayons']) if (etat[k]) { const o = {}; for (const id in etat[k]) o[PF.idMigre('CHANTIERS', id)] = etat[k][id]; if (JSON.stringify(o) !== JSON.stringify(etat[k])) { etat[k] = o; change = true; } }
+    if (change) enregistrerLocal();
+  } catch (e) { console.warn('recalage', e); }
+}
 function charger() {
   try {
     const s = JSON.parse(localStorage.getItem(CLE));
@@ -1195,7 +1205,7 @@ function niveauAtteint(p) {
   return n;
 }
 const derniereEtape = (p, ...k) => [...suiviDe(p)].reverse().find(e => k.includes(e.etape));
-const montantSigne = p => etapeDe(p) === 'signe' ? ((derniereEtape(p, 'signe') || {}).montant || 0) : 0;
+const montantSigne = p => etapeDe(p) !== 'signe' ? 0 : PF && p.leadId ? PF.montantHT(p.leadId) : ((derniereEtape(p, 'signe') || {}).montant || 0);
 const montantDevis = p => { const e = derniereEtape(p, 'signe', 'devis'); return e ? (e.montant || 0) : 0; };
 function rdvR2(p) { const e = derniereEtape(p, 'r2'); return e && e.rdv && e.rdv.date ? e.rdv : null; }
 const nomClient = p => (p.r1 && p.r1.nom) || (p.aRappeler && p.aRappeler.nom) || (p.contact && p.contact.nom) || '';
@@ -2827,7 +2837,7 @@ function afficherBilan(zone) {
   }
   const htmlSalons = parSalon.size ? `<h3>Salons</h3><table class="tableau"><thead><tr><th>Salon</th><th>Prosp.</th><th>R1</th><th>Signés</th></tr></thead><tbody>${[...parSalon.entries()].map(([n, ps]) => {
     const sg = ps.filter(p => etapeDe(p) === 'signe'), ca = sg.reduce((t, p) => t + montantSigne(p), 0), id = ps[0].salon.id;
-    return `<tr data-salon="${esc(id)}"><td>${esc(n)}${ca ? `<small>${esc(euros(ca))} signés</small>` : ''}</td><td>${ps.length}</td><td>${ps.filter(p => etapeDe(p)).length}</td><td class="${sg.length ? 'r1' : ''}">${sg.length}</td></tr>`;
+    return `<tr data-salon="${esc(id)}"><td>${esc(n)}${ca ? `<small>${esc(euros(ca))}${PF ? ' HT' : ''} signés</small>` : ''}</td><td>${ps.length}</td><td>${ps.filter(p => etapeDe(p)).length}</td><td class="${sg.length ? 'r1' : ''}">${sg.length}</td></tr>`;
   }).join('')}</tbody></table>` : '';
   if (!s.total) {
     zone.innerHTML = `${puces}${htmlSalons || '<p class="vide">Aucune porte frappée sur cette période.</p>'}`;
@@ -2904,7 +2914,7 @@ function afficherBilan(zone) {
       for (const p of avecBesoins) for (const b of besoinsDe(p)) { if (!parB.has(b)) parB.set(b, []); parB.get(b).push(p); }
       html += `<h3>Besoins exprimés</h3><table class="tableau"><thead><tr><th>Besoin</th><th>Portes</th><th>R1</th><th>Signés</th></tr></thead><tbody>${[...parB.entries()].sort((a, b) => b[1].length - a[1].length).map(([b, ps]) => {
         const sg = ps.filter(p => etapeDe(p) === 'signe'), ca = sg.reduce((t, p) => t + montantSigne(p), 0);
-        return `<tr><td>${esc(b)}${ca ? `<small>${esc(euros(ca))} signés</small>` : ''}</td><td>${ps.length}</td><td>${ps.filter(p => etapeDe(p)).length}</td><td class="${sg.length ? 'r1' : ''}">${sg.length}</td></tr>`;
+        return `<tr><td>${esc(b)}${ca ? `<small>${esc(euros(ca))}${PF ? ' HT' : ''} signés</small>` : ''}</td><td>${ps.length}</td><td>${ps.filter(p => etapeDe(p)).length}</td><td class="${sg.length ? 'r1' : ''}">${sg.length}</td></tr>`;
       }).join('')}</tbody></table>`;
     }
     if (plusieurs && qui === 'tous') {
@@ -3500,6 +3510,7 @@ window.centrerPorte = id => {
   const c = L.circleMarker([p.lat, p.lng], { radius: 22, color: '#4CA234', weight: 4, fill: false }).addTo(carte);
   setTimeout(() => carte.removeLayer(c), 2600);
 };
+recalerPlateforme();
 /* ───────── Démarrage ───────── */
 (async () => {
 try {
@@ -3508,6 +3519,7 @@ try {
   if (copie && copie.version === 1 && Array.isArray(copie.portes) && (!etat._t || (copie._t || '') > etat._t)) etat = Object.assign(vide(), copie);
   if (!texte && etat.portes.length) enregistrerLocal();   // première fois : on recopie dans IndexedDB
 } catch (e) {}
+recalerPlateforme();
 dessiner();
 if (salonEnCours && !salonDe(salonEnCours)) salonEnCours = null;
 planifierSynchro(1500);
