@@ -170,6 +170,29 @@ a{color:inherit;text-decoration:none;}
 .sb-logout{margin:12px 14px 16px;width:calc(100% - 28px);display:flex;align-items:center;justify-content:center;gap:9px;padding:11px 14px;border:none;border-radius:11px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.82);font-size:13px;font-weight:600;cursor:pointer;transition:background .15s,color .15s;font-family:inherit;}
 .sb-logout:hover{background:rgba(209,72,60,.22);color:#fff;}
 .sb-logout svg{flex-shrink:0;}
+.sb-save{margin:12px 14px 0;width:calc(100% - 28px);display:flex;align-items:center;gap:9px;padding:10px 14px;border:1px solid rgba(255,255,255,.16);border-radius:11px;background:transparent;color:rgba(255,255,255,.86);font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-align:left;}
+.sb-save:hover{background:rgba(255,255,255,.08);}
+.sb-save small{display:block;font-weight:500;font-size:11px;color:rgba(255,255,255,.55);}
+.sb-save.alerte small{color:#F2B26B;}
+.bandeau-save{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#FFF4E5;border:1px solid #F2D2A6;color:#7A4A12;border-radius:var(--r-m);padding:12px 16px;margin-bottom:16px;font-size:13px;}
+.bandeau-save b{color:#5c360a;}
+.bandeau-save .btn{margin-left:auto;}
+/* Liste des prospects en cartes (téléphone) */
+.lc-list{display:flex;flex-direction:column;gap:10px;padding:12px;}
+.lc{background:var(--blanc);border:1px solid var(--trait);border-radius:var(--r-m);padding:12px 14px;cursor:pointer;}
+.lc-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;}
+.lc-nom{font-weight:700;font-size:15px;color:var(--encre);}
+.lc-amt{font-weight:700;color:var(--bleu);white-space:nowrap;}
+.lc-sub{font-size:12.5px;color:var(--gris);margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.lc-act{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.lc-act .btn{flex:1;justify-content:center;min-width:90px;}
+/* Pipeline : passer à l'étape suivante */
+.kb-next{margin-top:9px;width:100%;border:1px dashed var(--trait-fort);background:var(--nuage);color:var(--bleu);border-radius:7px;padding:6px 8px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;text-align:left;}
+.kb-next:hover{background:var(--bleu-pale);border-style:solid;}
+/* Relances de devis */
+.rl-item{border-top:1px solid var(--trait);padding:11px 0;}
+.rl-item:first-child{border-top:0;}
+.rl-j{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:9px;background:#FFF4E5;color:#9A5A12;margin-left:6px;}
 
 .main{margin-left:236px;flex:1;min-width:0;display:flex;flex-direction:column;}
 .topbar{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--trait);height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;gap:16px;}
@@ -688,6 +711,7 @@ tbody tr:hover{background:var(--bleu-pale);}
       </div>
     </div>
     <nav class="sb-nav" id="sb-nav"></nav>
+    <button class="sb-save" id="sb-save" onclick="openMesDonnees()"></button>
     <button class="sb-logout" onclick="doLogout()">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
       <span>Déconnexion</span>
@@ -1063,8 +1087,17 @@ function migrerIds(){
 
 /* ─────────── Persistance locale ─────────── */
 let _demoRolesMigrated=false;
+/* Date d'entrée dans l'étape actuelle (sert aux relances de devis) */
+function suivreEtapes(){
+  for(const l of LEADS){
+    if(l._etapeVue===l.stage)continue;
+    l.etapeDepuis=l._etapeVue===undefined&&l.stage==='devis'&&l.devisDate?l.devisDate:(l._etapeVue===undefined?(l.createdAt||todayISO()):todayISO());
+    l._etapeVue=l.stage;
+  }
+}
 function saveStore(){
   try{
+    suivreEtapes();
     suivreChangements(true);
     const cols={};for(const col in COLS)cols[col]=COLS[col]().map(r=>r);
     localStorage.setItem(STORE_KEY,JSON.stringify(Object.assign(cols,{PILOTAGE,JOURNAL,STAGES,DASH,SUPPR,MAJ_GLOBAL,MIGR,v:3,_demoRolesV2:_demoRolesMigrated}),remplPhotos));
@@ -1251,7 +1284,7 @@ function loginAs(role,name,email,id){
   session={role,name,email,id:id||email};
   document.getElementById('screen-login').classList.remove('active');
   document.getElementById('app').classList.add('active');
-  buildSidebar();
+  buildSidebar();majBoutonSauvegarde();
   const first=NAV[role].find(x=>x.id);
   go(first.id);
 }
@@ -1391,7 +1424,7 @@ VIEWS.dashboard=function(){
   const r=session.role;
   const ids=dashConfigFor(r);
   const body=ids.map(id=>{try{return DASH_WIDGETS[id].render()||'';}catch(e){console.warn('widget',id,e);return '';}}).join('');
-  return `<div class="toolbar">
+  return `${['direction','commercial'].includes(r)?bandeauSauvegarde():''}<div class="toolbar">
       <div><h2 style="margin:0">${esc(dashTitle(r))}</h2><div class="muted" style="font-size:13px">Vue personnalisable — ${ids.length} bloc(s) affiché(s)</div></div>
       <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="openDashConfig()">Personnaliser</button>
     </div>
@@ -1543,8 +1576,8 @@ function wProchainsRdv(){
 }
 /* À relancer */
 function wARelancer(){
-  const leads=dashLeads().filter(l=>['devis','nego'].includes(l.stage)).sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
-  const rows=leads.slice(0,7).map(l=>{const j=l.createdAt?Math.floor((Date.now()-new Date(l.createdAt).getTime())/86400000):null;
+  const leads=dashLeads().filter(l=>['devis','nego'].includes(l.stage)).sort((a,b)=>joursSansNouvelles(b)-joursSansNouvelles(a));
+  const rows=leads.slice(0,7).map(l=>{const j=joursSansNouvelles(l);
     return `<tr onclick="openLeadDetail(${l.id})" style="cursor:pointer"><td><div class="t-main">${esc(l.nom)}</div><div class="t-sub">${esc(l.ville||'')}</div></td><td><span class="chip ${stageChipCls(l.stage)}"><span class="dot"></span>${esc(stage(l.stage).label)}</span></td><td class="right money">${fmtMoney(l.montant)}</td><td class="right ${j!=null&&j>=14?'down':'muted'}" style="font-size:12px">${j!=null?'il y a '+j+' j':'—'}</td></tr>`;}).join('');
   return cardFlush('À relancer','Devis et négociations en attente',rows?`<div class="tbl-wrap"><table><tbody>${rows}</tbody></table></div>`:emptyMini('Aucune relance en attente.'));
 }
@@ -1852,6 +1885,8 @@ VIEWS.leads=function(){
     <div class="card"><div class="card-bd flush"><div id="leads-table"></div></div></div>`;
 };
 VIEW_AFTER.leads=function(){renderLeadsTable();};
+/* Passage portrait ↔ paysage : la liste se réaffiche en tableau ou en cartes */
+let _lcTaille=null;addEventListener('resize',()=>{clearTimeout(_lcTaille);_lcTaille=setTimeout(()=>{if(currentView()==='leads')renderLeadsTable();},250);});
 
 function renderLeadsTable(){
   const box=document.getElementById('leads-table');if(!box)return;
@@ -1862,6 +1897,18 @@ function renderLeadsTable(){
   list=list.slice().sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
   if(!list.length){box.innerHTML=`<div class="empty"><div class="em-ic">${icon('pipeline',40)}</div><b>Aucun prospect</b><p>Ajoutez votre premier prospect pour démarrer le suivi commercial.</p><button class="btn btn-primary" onclick="openLeadForm()">+ Nouveau prospect</button></div>`;return;}
   const showCom=session.role==='direction';
+  if(matchMedia('(max-width:700px)').matches){
+    box.innerHTML=`<div class="lc-list">${list.map(l=>{const tel=String(l.tel||'').replace(/[^+\d]/g,''),waze=wazeLead(l);
+      return `<div class="lc" onclick="openLeadDetail(${l.id})">
+        <div class="lc-top"><span class="lc-nom">${esc(l.nom)}</span><span class="lc-amt">${l.montant?fmtMoney(l.montant):''}</span></div>
+        <div class="lc-sub"><span class="chip ${stageChipCls(l.stage)}"><span class="dot"></span>${esc(stage(l.stage).label)}</span>${prestDot(l.prestation)}${esc(prest(l.prestation).label)}</div>
+        <div class="lc-sub">${esc([l.ville,showCom?leadComNames(l):''].filter(Boolean).join(' · '))}</div>
+        <div class="lc-act" onclick="event.stopPropagation()">
+          ${tel?`<a class="btn btn-outline btn-sm" href="tel:${esc(tel)}">📞 Appeler</a>`:''}
+          ${waze?`<a class="btn btn-outline btn-sm" href="${esc(waze)}" target="_blank" rel="noopener">🧭 Itinéraire</a>`:''}
+        </div></div>`;}).join('')}</div>`;
+    return;
+  }
   box.innerHTML=`<div class="tbl-wrap"><table><thead><tr>
     <th>Prospect</th><th>Prestation</th><th class="right">Montant HT</th><th>Étape</th>
     ${showCom?'<th>Commercial</th>':''}<th>Source</th><th></th></tr></thead><tbody>
@@ -2804,7 +2851,7 @@ function createChantierFromLead(l,comment){
 ═══════════════════════════════════════════════════════════ */
 VIEWS.pipeline=function(){
   return `<div class="toolbar">
-    <div class="muted" style="font-size:13px">${matchMedia('(hover:none)').matches?'Touchez un prospect pour l’ouvrir et changer son étape.':'Glissez une carte d’une colonne à l’autre pour changer son étape.'}</div>
+    <div class="muted" style="font-size:13px">${matchMedia('(hover:none),(pointer:coarse)').matches?'Touchez « Passer à » pour avancer un prospect d’une étape, ou touchez-le pour ouvrir sa fiche.':'Glissez une carte d’une colonne à l’autre pour changer son étape.'}</div>
     <div style="margin-left:auto" class="flex gap">
       ${session.role==='direction'?`<button class="btn btn-outline btn-sm" onclick="go('reglages')">Gérer les étapes</button>`:''}
       <button class="btn btn-primary btn-sm" onclick="openLeadForm()">+ Nouveau prospect</button>
@@ -2879,9 +2926,22 @@ function kbCard(l){
       onclick="openLeadDetail(${l.id})">
     <div class="kb-card-top"><span class="kb-card-name">${esc(l.nom)}</span><span class="kb-card-amt">${fmtMoney(l.montant)}</span></div>
     <div class="kb-card-meta">${prestDot(l.prestation)}${esc(prest(l.prestation).label)} · ${esc(l.ville)}</div>
+    ${(()=>{const n=etapeSuivante(l.stage);return n?`<button class="kb-next" onclick="event.stopPropagation();kbAvancer(${l.id})">Passer à : ${esc(n.won?'Signé (devis Interfast)':n.label)} ▸</button>`:'';})()}
     ${session.role==='direction'&&com?`<div class="kb-card-meta"><span class="ava" style="width:18px;height:18px;font-size:8px;background:${ROLES.commercial.color}">${initials(com.name)}</span> ${esc(com.name.split(' ')[0])}</div>`:''}
   </div>`;
 }
+function etapeSuivante(k){
+  const ordre=STAGES.filter(s=>!s.lost),i=ordre.findIndex(s=>s.key===k);
+  return i>=0&&i<ordre.length-1?ordre[i+1]:null;
+}
+function changerEtape(l,newStage){
+  const s=stage(newStage);
+  if(s.won&&!l.interfastRef){openSignForm(l.id);return false;}
+  const prev=l.stage;l.stage=newStage;
+  logAct('Étape : '+stage(prev).label+' → '+s.label,l.nom);
+  saveStore();toast(l.nom+' → '+s.label);return true;
+}
+function kbAvancer(id){const l=LEADS.find(x=>x.id===id),n=l&&etapeSuivante(l.stage);if(n&&changerEtape(l,n.key))renderPipeline();}
 let _dragLeadId=null;
 function kbDragStart(e,id){_dragLeadId=id;e.target.classList.add('drag');e.dataTransfer.effectAllowed='move';}
 function kbDragOver(e,col){e.preventDefault();col.classList.add('dragover');}
@@ -2889,11 +2949,7 @@ function kbDrop(e,col){
   e.preventDefault();col.classList.remove('dragover');
   const newStage=col.dataset.stage;const l=LEADS.find(x=>x.id===_dragLeadId);
   if(!l||l.stage===newStage)return;
-  const s=stage(newStage);
-  if(s.won && !l.interfastRef){openSignForm(l.id);return;}
-  const prev=l.stage;l.stage=newStage;
-  logAct('Étape : '+stage(prev).label+' → '+s.label,l.nom);
-  saveStore();renderPipeline();toast(l.nom+' → '+s.label);
+  if(changerEtape(l,newStage))renderPipeline();
 }
 
 /* ── Lien Google Agenda (approche bouton) ── */
@@ -4104,10 +4160,8 @@ VIEWS.reglages=function(){
     <div class="card-bd">
       <p class="muted" style="font-size:13px;margin-bottom:14px;line-height:1.6">Cette version fonctionne en local (sur cet appareil). La sauvegarde exporte <b>toutes</b> les données, y compris la trésorerie, dans un fichier que vous pouvez réimporter ici (sur cet appareil ou un autre). La connexion au serveur partagé sera branchée après validation de l'interface.</p>
       <div class="flex gap" style="flex-wrap:wrap">
-        <button class="btn btn-outline" onclick="exportData()">Exporter une sauvegarde</button>
-        <button class="btn btn-outline" onclick="triggerImport()">Importer une sauvegarde</button>
-        <input type="file" id="import-file" accept="application/json,.json" style="display:none" onchange="importData(this)">
-        <button class="btn btn-danger" onclick="resetData()">Réinitialiser (données démo)</button>
+        <button class="btn btn-primary" onclick="openMesDonnees()">Sauvegarder, restaurer ou vider…</button>
+        <button class="btn btn-outline" onclick="resetData()">Recharger les données de démo</button>
       </div>
     </div></div>
     <div class="card"><div class="card-hd"><div><h3>Journal d'activité</h3><div class="sub">Traçabilité des actions</div></div></div>
@@ -4184,12 +4238,67 @@ function deleteStage(key){
     saveStore();renderStagesEditor();toast('Étape supprimée.','🗑️');
   },'Supprimer',true);
 }
-function exportData(){
-  /* sauvegarde complète : identique à ce qui est stocké (dont PILOTAGE = trésorerie) */
-  const blob=JSON.stringify({TEAM,LEADS,RDVS,CHANTIERS,CHARGES,ENCAISSEMENTS,PILOTAGE,JOURNAL,STAGES,DASH,SUPPR,MAJ_GLOBAL,MIGR,v:3},null,2);
-  const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(blob);
-  a.download='sublime-toit-sauvegarde-'+todayISO()+'.json';document.body.appendChild(a);a.click();a.remove();
-  toast('Sauvegarde téléchargée (CRM + trésorerie).');
+/* ═══ MES DONNÉES : sauvegarde (plateforme + carte), restauration, données de démo ═══ */
+const CLE_SAUVEGARDE=STORE_KEY+'_derniereSauvegarde', JOURS_RAPPEL_SAUVEGARDE=7;
+function derniereSauvegarde(){try{return localStorage.getItem(CLE_SAUVEGARDE)||'';}catch(e){return'';}}
+function joursDepuisSauvegarde(){const d=derniereSauvegarde();return d?Math.floor((Date.now()-new Date(d))/86400000):null;}
+function sauvegardeEnRetard(){const j=joursDepuisSauvegarde();return j===null?LEADS.length>0:j>=JOURS_RAPPEL_SAUVEGARDE;}
+function majBoutonSauvegarde(){
+  const b=document.getElementById('sb-save');if(!b)return;const j=joursDepuisSauvegarde();
+  b.classList.toggle('alerte',sauvegardeEnRetard());
+  b.innerHTML=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+    <span>Mes données<small>${j===null?'Jamais sauvegardées':j===0?'Sauvegardées aujourd’hui':'Sauvegardées il y a '+j+' jour'+(j>1?'s':'')}</small></span>`;
+}
+function bandeauSauvegarde(){
+  if(!sauvegardeEnRetard())return'';const j=joursDepuisSauvegarde();
+  return `<div class="bandeau-save">💾 <span><b>${j===null?'Tes données n’ont jamais été sauvegardées.':'Dernière sauvegarde il y a '+j+' jours.'}</b> Elles ne sont que sur cet appareil : en cas de perte du téléphone, tout serait perdu.</span><button class="btn btn-primary btn-sm" onclick="exportData()">Sauvegarder maintenant</button></div>`;
+}
+/* La carte (iframe) est chargée en arrière-plan si besoin, pour inclure les portes dans la sauvegarde */
+function carteEnFond(){
+  return new Promise(ok=>{
+    if(!document.getElementById('prospection-cadre')){stpCadre(true);if(currentView()!=='prospection')document.getElementById('prospection-cadre').style.display='none';}
+    let n=0;const t=()=>{const f=document.getElementById('prospection-iframe');let w=null;try{w=f&&f.contentWindow;}catch(e){}
+      if(w&&w.exportPourPlateforme)return ok(w);if(++n>60)return ok(null);setTimeout(t,200);};t();
+  });
+}
+async function exportData(){
+  toast('Préparation de la sauvegarde…','⏳');
+  let carte=null;try{const w=await carteEnFond();if(w)carte=w.exportPourPlateforme();}catch(e){console.warn(e);}
+  const json=JSON.stringify({app:'sublime-toit',TEAM,LEADS,RDVS,CHANTIERS,CHARGES,ENCAISSEMENTS,PILOTAGE,JOURNAL,STAGES,DASH,SUPPR,MAJ_GLOBAL,MIGR,v:3,carte,sauveLe:new Date().toISOString()});
+  const m=session&&teamMember(session.id);
+  const nom=nomFichier('sublime-toit-sauvegarde-'+(m?m.name.split(' ')[0]:'')+'-'+todayISO(),'json');
+  await donnerFichier(new Blob([json],{type:'application/json'}),nom,'Sauvegarde Sublime Toit');
+  try{localStorage.setItem(CLE_SAUVEGARDE,new Date().toISOString());}catch(e){}
+  majBoutonSauvegarde();const bd=document.querySelector('.bandeau-save');if(bd)bd.remove();
+  if(document.getElementById('md-etat'))openMesDonnees();
+}
+function openMesDonnees(){
+  const j=joursDepuisSauvegarde();
+  openModal('Mes données','Plateforme et carte de prospection',`
+    <p id="md-etat" style="font-size:13px;color:var(--ardoise);line-height:1.6;margin-bottom:14px">Tes données sont enregistrées <b>uniquement sur cet appareil</b> (pas encore de synchro).
+      Une sauvegarde régulière évite de tout perdre si le téléphone est perdu, changé ou réinitialisé.<br>
+      <b>${j===null?'Aucune sauvegarde pour l’instant.':j===0?'Dernière sauvegarde : aujourd’hui.':'Dernière sauvegarde : il y a '+j+' jour'+(j>1?'s':'')+'.'}</b></p>
+    <div class="sec-lbl">Sauvegarder</div>
+    <p class="muted" style="font-size:12.5px;margin-bottom:10px">Un fichier qui contient tes prospects, rendez-vous, fiches R1 (photos, croquis), chantiers et les portes de la carte. Sur iPhone, choisis « Enregistrer dans Fichiers » (iCloud Drive) ou envoie-le-toi par Mail.</p>
+    <button class="btn btn-primary" onclick="exportData()">💾 Sauvegarder maintenant</button>
+    <div class="sec-lbl" style="margin-top:20px">Restaurer</div>
+    <p class="muted" style="font-size:12.5px;margin-bottom:10px">Remplace les données de la plateforme par celles d’une sauvegarde ; les portes de la carte sont fusionnées.</p>
+    <button class="btn btn-outline" onclick="triggerImport()">Restaurer une sauvegarde…</button>
+    <input type="file" id="import-file" accept="application/json,.json" style="display:none" onchange="importData(this)">
+    <div class="sec-lbl" style="margin-top:20px">Démarrer avec une plateforme vide</div>
+    <p class="muted" style="font-size:12.5px;margin-bottom:10px">Supprime les prospects, rendez-vous et chantiers de démonstration (et tout ce qui a été saisi) sur cet appareil. L’équipe, les étapes du pipeline et les portes de la carte sont conservées.</p>
+    <button class="btn btn-danger" onclick="viderDonnees()">Vider les données de démo</button>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>`);
+}
+function viderDonnees(){
+  confirmModal('Vider les données',`Supprimer ${LEADS.length} prospect(s), ${RDVS.length} rendez-vous et ${CHANTIERS.length} chantier(s) sur cet appareil ? L’équipe, les étapes et la carte sont conservées. Pensez à sauvegarder avant si vous aviez saisi de vraies données.`,()=>{
+    LEADS=[];RDVS=[];CHANTIERS=[];CHARGES=[];ENCAISSEMENTS=[];JOURNAL=[];
+    SUPPR=[];MAJ_GLOBAL={};oublierEmpreintes();suivreChangements(false);
+    try{localStorage.setItem(STORE_KEY+'_demoVidee','1');}catch(e){}
+    logAct('Données de démonstration supprimées','');saveStore();majBoutonSauvegarde();
+    const w=stpCarte();if(w){try{w.dessiner();}catch(e){}}
+    toast('Plateforme vide : à vous de jouer !','✨');go('dashboard');
+  },'Tout vider',true);
 }
 function triggerImport(){const inp=document.getElementById('import-file');if(inp)inp.click();}
 function importData(input){
@@ -4205,6 +4314,7 @@ function importData(input){
         if(d.PILOTAGE&&typeof d.PILOTAGE==='object')PILOTAGE=d.PILOTAGE; else PILOTAGE={};
         if(d.DASH&&typeof d.DASH==='object')DASH=d.DASH;
         SUPPR=[];MAJ_GLOBAL={};
+        if(d.carte)carteEnFond().then(w=>{if(w&&w.fusionnerDepuisPlateforme){try{const r=w.fusionnerDepuisPlateforme(d.carte);toast(`Carte : ${r.ajouts} porte(s) ajoutée(s), ${r.majs} mise(s) à jour`,'🗺️');}catch(e){console.warn(e);}}});
         chargerPhotos().catch(()=>{}).then(()=>{migrerIds();oublierEmpreintes();suivreChangements(false);saveStore();logAct('Sauvegarde importée',file.name);saveStore();
           toast('Sauvegarde importée.');go(NAV[session.role].find(x=>x.id).id);});
         return;
@@ -4422,6 +4532,49 @@ function rdvsJournee(dec){
   }
   return out;
 }
+/* ═══ RELANCES DE DEVIS ═══
+   Un devis envoyé (ou en négociation) sans nouvelle depuis RELANCE_JOURS jours remonte dans « Ma journée »,
+   avec un SMS de relance déjà écrit. Chaque relance (SMS ou appel) remet le compteur à zéro. */
+const RELANCE_JOURS=7, RELANCE_MAX=3;
+const joursDepuis=d=>d?Math.max(0,Math.floor((Date.now()-new Date(d))/86400000)):0;
+function derniereNouvelle(l){const r=(l.relances||[]).slice(-1)[0];return [l.etapeDepuis||l.devisDate||l.createdAt,r&&r.le].filter(Boolean).sort().pop();}
+const joursSansNouvelles=l=>joursDepuis(derniereNouvelle(l));
+function devisARelancer(){
+  return myLeads().filter(l=>['devis','nego'].includes(l.stage)&&(l.relances||[]).length<RELANCE_MAX&&joursSansNouvelles(l)>=RELANCE_JOURS)
+    .sort((a,b)=>joursSansNouvelles(b)-joursSansNouvelles(a));
+}
+function texteRelance(l){
+  const nom=l.nom&&!/^Porte /.test(l.nom)?' '+l.nom:'',p=l.prestation?prest(l.prestation).label.toLowerCase():'vos travaux';
+  const n=(l.relances||[]).length;
+  return n
+    ?`Bonjour${nom}, je reviens vers vous concernant notre proposition pour ${p}. Si vous avez des questions ou souhaitez ajuster quelque chose, je peux passer vous voir ou vous appeler, comme vous préférez. Bonne journée, ${signatureSms()}`
+    :`Bonjour${nom}, je me permets de revenir vers vous au sujet du devis que je vous ai transmis pour ${p}. Avez-vous pu en prendre connaissance ? Je reste disponible pour en discuter ou répondre à vos questions. Bonne journée, ${signatureSms()}`;
+}
+function noterRelance(id,moyen){
+  const l=LEADS.find(x=>x.id===id);if(!l)return;
+  (l.relances=l.relances||[]).push({le:new Date().toISOString(),moyen,par:session.id});
+  logAct('Relance du devis ('+moyen+')',l.nom);saveStore();
+}
+function relancerSms(id){
+  const l=LEADS.find(x=>x.id===id);if(!l)return;const num=telSmsPf(l.tel);
+  if(!num){toast('Pas de numéro de portable pour ce client.','⚠️');return;}
+  noterRelance(id,'SMS');
+  location.href='sms:'+num+(/android/i.test(navigator.userAgent)?'?':'&')+'body='+encodeURIComponent(texteRelance(l));
+  setTimeout(majJournee,400);
+}
+function relanceFaite(id){noterRelance(id,'appel');majJournee();toast('Relance notée : prochain rappel dans '+RELANCE_JOURS+' jours.','✓');}
+function htmlRelances(){
+  const liste=devisARelancer();if(!liste.length)return'';
+  return `<div class="sec-lbl" style="margin-top:18px">Devis à relancer (${liste.length})</div>${liste.slice(0,5).map(l=>{
+    const tel=String(l.tel||'').replace(/[^+\d]/g,''),n=(l.relances||[]).length;
+    return `<div class="rl-item"><div class="t-main" style="cursor:pointer" onclick="openLeadDetail(${l.id})">${esc(l.nom)}<span class="rl-j">${joursSansNouvelles(l)} j sans nouvelle</span></div>
+      <div class="t-sub">${esc(stage(l.stage).label)}${l.montant?' · '+fmtMoney(l.montant)+' HT':''}${n?` · ${n} relance${n>1?'s':''} déjà faite${n>1?'s':''}`:''}</div>
+      <div class="flex gap" style="flex-wrap:wrap;margin-top:8px">
+        ${telSmsPf(l.tel)?`<button class="btn btn-primary btn-sm" onclick="relancerSms(${l.id})">💬 SMS de relance</button>`:''}
+        ${tel?`<a class="btn btn-outline btn-sm" href="tel:${esc(tel)}">📞 Appeler</a>`:''}
+        <button class="btn btn-outline btn-sm" onclick="relanceFaite(${l.id})">✓ Relancé</button>
+      </div></div>`;}).join('')}`;
+}
 function wMaJournee(){
   if(!_mjPosDemande&&navigator.geolocation){_mjPosDemande=true;navigator.geolocation.getCurrentPosition(p=>{_mjPos=[p.coords.latitude,p.coords.longitude];majJournee();},()=>{},{maximumAge:300000,timeout:10000});}
   return `<div id="w-journee">${htmlJourneePf()}</div>`;
@@ -4450,7 +4603,7 @@ function htmlJourneePf(){
           ${r.type==='R1'?`<button class="btn btn-outline btn-sm" onclick="openR1(${ld.id})">Fiche R1</button>`:''}
         </div></div></div>`;
   }).join('');
-  return card('Ma journée',dec?'Demain':'Aujourd’hui',`${onglets}<div style="margin-top:12px">${items||emptyMini(`Aucun rendez-vous ${dec?'demain':'aujourd’hui'}.`)}</div>`,
+  return card('Ma journée',dec?'Demain':'Aujourd’hui',`${onglets}<div style="margin-top:12px">${items||emptyMini(`Aucun rendez-vous ${dec?'demain':'aujourd’hui'}.`)}</div>${dec?'':htmlRelances()}`,
     `<button class="btn btn-outline btn-sm" onclick="go('agenda')">Agenda</button>`);
 }
 

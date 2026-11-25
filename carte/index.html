@@ -3291,6 +3291,9 @@ $('#b-menu').onclick = (demande) => {
     };
   });
 };
+// Sauvegarde de la plateforme : même contenu que « Partager par fichier », et fusion au retour
+window.exportPourPlateforme = () => ({ app: 'carte-prospection', version: 1, par: etat.moi, exporteLe: maintenant(), chantiers: etat.chantiers, portes: etat.portes.map(p => Object.assign({}, p, { photos: undefined })), rues: etat.rues || {}, besoinsListe: etat.besoinsListe || null, salons: salons(), besoinsListeMaj: etat.besoinsListeMaj || '' });
+window.fusionnerDepuisPlateforme = src => { if (!src || src.app !== 'carte-prospection' || !Array.isArray(src.portes)) throw new Error('pas de carte dans ce fichier'); const r = fusionner(src); sauver(); dessiner(); return r; };
 async function exporter() {
   const json = JSON.stringify({ app: 'carte-prospection', version: 1, par: etat.moi, exporteLe: maintenant(), chantiers: etat.chantiers, portes: etat.portes.map(p => Object.assign({}, p, { photos: undefined })), rues: etat.rues || {}, besoinsListe: etat.besoinsListe || null, salons: salons(), besoinsListeMaj: etat.besoinsListeMaj || '' });
   const nom = `prospection-${cleAdresse(etat.moi || 'moi').replace(/ /g, '-')}-${jourCle(new Date())}.json`;
