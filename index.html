@@ -282,7 +282,13 @@ textarea.r1-in{min-height:78px;resize:vertical;}
 .draw-tool{border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;border-radius:8px;padding:8px 11px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;}
 .draw-tool.on{background:#fff;color:#141c26;}
 label.draw-btn{display:inline-flex;align-items:center;gap:4px;}
-.draw-hint{background:#141c26;color:rgba(255,255,255,.7);font-size:12.5px;padding:0 14px 8px;}
+.draw-hint{background:#141c26;color:rgba(255,255,255,.7);font-size:12.5px;line-height:1.3;padding:0 14px 6px;display:flex;align-items:center;gap:8px;height:44px;overflow-x:auto;overflow-y:hidden;flex:none;}
+.draw-hint .draw-btn{padding:6px 10px;font-size:12.5px;white-space:nowrap;}
+.draw-hint b{white-space:nowrap;}
+.draw-selbar{display:inline-flex;gap:6px;flex-wrap:wrap;}
+.draw-ic{font-size:20px;line-height:1;padding:6px 12px;}
+.draw-btn:disabled{opacity:.35;cursor:default;}
+.draw-del{border-color:#e08a80;color:#ffd9d4;}
 .draw-input{position:absolute;z-index:2;background:#fff;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.35);padding:10px;display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:600;color:var(--marine);}
 .draw-input[hidden]{display:none;}
 .draw-input input{flex:1;min-width:0;border:1.5px solid var(--trait-fort);border-radius:8px;padding:9px 10px;font:inherit;font-size:16px;font-weight:500;}
@@ -2277,7 +2283,7 @@ function r1PhotosBody(){
 }
 function r1AddPhoto(ev){const file=ev.target.files&&ev.target.files[0];if(!file)return;compressPhoto(file,data=>{_r1.data.photos.push({src:data,note:''});r1SaveSoon();r1RenderBody();r1Touch();toast('Photo ajoutée.');});}
 function r1DelPhoto(i){confirmModal('Supprimer la photo','Retirer cette photo de la fiche R1 ?',()=>{_r1.data.photos.splice(i,1);r1SaveSoon();r1RenderBody();r1Touch();},'Supprimer',true);}
-function r1Annote(i){const p=_r1.data.photos[i];openDraw({bg:p.src,title:'Annoter la photo',onsave:d=>{p.src=d;r1SaveSoon();r1RenderBody();}});}
+function r1Annote(i){const p=_r1.data.photos[i];openDraw({bg:p.base||p.src,calque:p.calque||null,title:'Annoter la photo',onsave:(d,c)=>{if(!p.base)p.base=p.src;p.src=d;p.calque=Object.assign(c,{bg:p.base});r1SaveSoon();r1RenderBody();}});}
 
 /* ── Croquis à main levée ── */
 function r1CroquisBody(){
@@ -2290,10 +2296,11 @@ function r1CroquisBody(){
   </div>
   <p class="r1-sub" style="margin-top:10px">Outils : stylo, trait droit, cote en mètres et texte.</p>`;
 }
-function r1NewCroquis(bg){openDraw({bg:bg||'grid',photo:true,title:bg?'Croquis sur photo':'Croquis à main levée',onsave:d=>{_r1.data.croquis.push(d);r1SaveSoon();r1RenderBody();r1Touch();}});}
+function r1Calques(){if(!Array.isArray(_r1.data.croquisCalques))_r1.data.croquisCalques=[];return _r1.data.croquisCalques;}
+function r1NewCroquis(bg){openDraw({bg:bg||'grid',photo:true,title:bg?'Croquis sur photo':'Croquis à main levée',onsave:(d,cal)=>{_r1.data.croquis.push(d);r1Calques()[_r1.data.croquis.length-1]=cal;r1SaveSoon();r1RenderBody();r1Touch();}});}
 function r1CroquisPhoto(ev){const file=ev.target.files&&ev.target.files[0];ev.target.value='';if(!file)return;compressPhoto(file,data=>r1NewCroquis(data));}
-function r1EditCroquis(i){openDraw({bg:_r1.data.croquis[i],photo:true,title:'Modifier le croquis',onsave:d=>{_r1.data.croquis[i]=d;r1SaveSoon();r1RenderBody();}});}
-function r1DelCroquis(i){confirmModal('Supprimer le croquis','Retirer ce croquis ?',()=>{_r1.data.croquis.splice(i,1);r1SaveSoon();r1RenderBody();r1Touch();},'Supprimer',true);}
+function r1EditCroquis(i){const cal=r1Calques()[i];openDraw({bg:_r1.data.croquis[i],calque:cal||null,photo:true,title:'Modifier le croquis',onsave:(d,c)=>{_r1.data.croquis[i]=d;r1Calques()[i]=c;r1SaveSoon();r1RenderBody();}});}
+function r1DelCroquis(i){confirmModal('Supprimer le croquis','Retirer ce croquis ?',()=>{_r1.data.croquis.splice(i,1);r1Calques().splice(i,1);r1SaveSoon();r1RenderBody();r1Touch();},'Supprimer',true);}
 
 /* ── Récap / préconisations / signature ── */
 function r1RecapBody(){
@@ -2364,38 +2371,55 @@ function r1Print(){
 }
 
 /* ═══ Moteur de dessin (annotation photo / croquis / signature) ═══
-   Outils : stylo, trait droit, cote en mètres, texte. Photo de fond (appareil ou galerie) pour les croquis. */
+   Outils : modifier (sélection), stylo, trait droit, cote en mètres, texte. Photo de fond (appareil ou galerie).
+   Tout reste modifiable jusqu'à « Valider » ; ↶ / ↷ pour revenir en arrière ou rétablir.
+   Les éléments sont aussi gardés à part (calque) : un croquis ou une photo rouverts restent modifiables. */
 let _draw=null;
 const DRAW_COLORS=['#0C508C','#D1483C','#4CA234','#1a2430','#E8A13A','#ffffff'];
-const DRAW_TOOLS=[['pen','Stylo'],['line','Trait droit'],['cote','Cote (m)'],['text','Texte']];
+const DRAW_TOOLS=[['select','✋ Modifier'],['pen','Stylo'],['line','Trait droit'],['cote','Cote (m)'],['text','Texte']];
 function openDraw(opts){
   let o=document.getElementById('draw-screen');
   if(!o){o=document.createElement('div');o.id='draw-screen';o.className='draw-screen';document.body.appendChild(o);}
   o.classList.add('open');
-  const sign=!!opts.sign;
+  const sign=!!opts.sign,cal=opts.calque||null;
   o.innerHTML=`
     <div class="draw-bar">
       <span class="dt">${esc(opts.title||'Dessin')}</span>
-      ${sign?'':`<div class="draw-grp">${DRAW_TOOLS.map(([k,t],i)=>`<button class="draw-tool ${i===0?'on':''}" data-tool="${k}" onclick="drawTool('${k}',this)">${t}</button>`).join('')}</div>`}
-      ${sign?'':`<div class="draw-grp">${DRAW_COLORS.map((c,i)=>`<button class="draw-sw ${i===0?'on':''}" style="background:${c}" data-col="${c}" onclick="drawColor('${c}',this)" title="Couleur"></button>`).join('')}</div>`}
-      ${sign?'':`<div class="draw-grp"><button class="draw-sz" data-sz="2" onclick="drawSize(2,this)" title="Fin">·</button>
-      <button class="draw-sz on" data-sz="4" onclick="drawSize(4,this)" title="Moyen">•</button>
-      <button class="draw-sz" data-sz="8" onclick="drawSize(8,this)" title="Épais">⬤</button></div>`}
+      <div class="draw-grp"><button class="draw-btn draw-ic" id="draw-undo" onclick="drawUndo()" title="Retour en arrière" aria-label="Retour en arrière">↶</button>
+        <button class="draw-btn draw-ic" id="draw-redo" onclick="drawRedo()" title="Rétablir" aria-label="Rétablir">↷</button></div>
+      ${sign?'':`<div class="draw-grp">${DRAW_TOOLS.map(([k,t])=>`<button class="draw-tool ${k==='pen'?'on':''}" data-tool="${k}" onclick="drawTool('${k}')">${t}</button>`).join('')}</div>`}
+      ${sign?'':`<div class="draw-grp">${DRAW_COLORS.map((c,i)=>`<button class="draw-sw ${i===0?'on':''}" style="background:${c}" data-col="${c}" onclick="drawColor('${c}')" title="Couleur"></button>`).join('')}</div>`}
+      ${sign?'':`<div class="draw-grp"><button class="draw-sz" data-sz="2" onclick="drawSize(2)" title="Fin">·</button>
+      <button class="draw-sz on" data-sz="4" onclick="drawSize(4)" title="Moyen">•</button>
+      <button class="draw-sz" data-sz="8" onclick="drawSize(8)" title="Épais">⬤</button></div>`}
       ${opts.photo?`<label class="draw-btn" title="Mettre une photo en fond">📷 Photo de fond<input type="file" accept="image/*" style="display:none" onchange="drawBgPhoto(event)"></label>`:''}
-      <div class="draw-grp"><button class="draw-btn" onclick="drawUndo()">Annuler</button>
-      <button class="draw-btn" onclick="drawClear()">Tout effacer</button>
+      <div class="draw-grp"><button class="draw-btn" onclick="drawClear()">Tout effacer</button>
       <button class="draw-btn" onclick="drawCancel()">Fermer</button>
       <button class="draw-btn go" onclick="drawSave()">Valider</button></div>
     </div>
     <div class="draw-hint" id="draw-hint"></div>
     <div class="draw-canvas-wrap" id="draw-wrap"><canvas id="draw-cv"></canvas><div class="draw-input" id="draw-input" hidden></div></div>`;
-  _draw={tool:'pen',color:sign?'#1a2430':'#0C508C',size:sign?3:4,strokes:[],cur:null,bg:opts.bg,img:null,onsave:opts.onsave,fit:null,sign};
-  drawHint();
+  _draw={tool:'pen',color:sign?'#1a2430':'#0C508C',size:sign?3:4,strokes:cal?JSON.parse(JSON.stringify(cal.strokes||[])):[],cur:null,
+    bg:cal?cal.bg:opts.bg,img:null,onsave:opts.onsave,fit:null,sign,undo:[],redo:[],sel:-1,drag:null,ancienBox:cal?cal.box:null};
+  drawHint();drawMajHisto();
   requestAnimationFrame(()=>drawInit());
 }
-const DRAW_HINTS={pen:'Dessinez librement au doigt.',line:'Glissez d’un point à un autre pour tracer un trait droit (il s’aligne tout seul à l’horizontale ou à la verticale).',
+const DRAW_HINTS={select:'Touchez un élément pour le sélectionner : glissez-le pour le déplacer, ou tirez un bout de trait / de cote.',pen:'Dessinez librement au doigt.',
+  line:'Glissez d’un point à un autre pour tracer un trait droit (il s’aligne tout seul à l’horizontale ou à la verticale).',
   cote:'Glissez d’une extrémité à l’autre, puis saisissez la longueur en mètres.',text:'Touchez l’endroit où placer le texte.'};
-function drawHint(){const h=document.getElementById('draw-hint');if(h)h.textContent=_draw.sign?'Signez dans le cadre.':DRAW_HINTS[_draw.tool];}
+function drawHint(){
+  const h=document.getElementById('draw-hint');if(!h||!_draw)return;
+  if(_draw.sign){h.textContent='Signez dans le cadre.';return;}
+  const s=_draw.strokes[_draw.sel];
+  if(s){
+    const nom={pen:'Tracé sélectionné',line:'Trait droit sélectionné',cote:'Cote sélectionnée',text:'Texte sélectionné'}[s.type];
+    h.innerHTML=`<b style="color:#fff">${nom}</b>
+      <span class="draw-selbar">${s.type==='text'?'<button class="draw-btn" onclick="drawEditSel()">Modifier le texte</button>':''}${s.type==='cote'?'<button class="draw-btn" onclick="drawEditSel()">Modifier la valeur</button>':''}
+      <button class="draw-btn draw-del" onclick="drawDelSel()">Supprimer</button><button class="draw-btn" onclick="drawDeselect()">OK</button></span>`;
+    return;
+  }
+  h.textContent=DRAW_HINTS[_draw.tool];
+}
 function drawInit(){
   const cv=document.getElementById('draw-cv'),wrap=document.getElementById('draw-wrap');
   if(!cv||!wrap)return;
@@ -2403,42 +2427,51 @@ function drawInit(){
   cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';
   const ctx=cv.getContext('2d');ctx.scale(dpr,dpr);
   _draw.cv=cv;_draw.ctx=ctx;_draw.W=W;_draw.H=H;
-  drawLoadBg();
+  drawLoadBg(true);
   cv.onpointerdown=drawDown;cv.onpointermove=drawMove;cv.onpointerup=drawUp;cv.onpointercancel=drawUp;cv.onpointerleave=drawUp;
 }
-function drawLoadBg(){
+/* Zone de référence des éléments : la photo (là où elle est affichée) ou toute la feuille */
+function drawBox(){const {img,W,H}=_draw;if(img){const r=Math.min(W/img.width,H/img.height),w=img.width*r,h=img.height*r;return{x:(W-w)/2,y:(H-h)/2,w,h};}return{x:0,y:0,w:W,h:H};}
+/* Un calque rouvert sur un autre écran (taille différente) : les éléments suivent la photo / la feuille */
+function drawRecaler(){
+  const a=_draw.ancienBox;_draw.ancienBox=null;if(!a||!a.w)return;
+  const b=drawBox(),k=Math.min(b.w/a.w,b.h/a.h);if(Math.abs(k-1)<.001&&a.x===b.x&&a.y===b.y)return;
+  const m=p=>({x:b.x+(p.x-a.x)*k,y:b.y+(p.y-a.y)*k});
+  _draw.strokes.forEach(s=>{if(s.pts)s.pts=s.pts.map(m);if(s.type==='text'){const q=m(s);s.x=q.x;s.y=q.y;}});
+}
+function drawLoadBg(premier){
   _draw.img=null;
-  if(_draw.bg&&_draw.bg!=='grid'&&_draw.bg!=='white'){const im=new Image();im.onload=()=>{if(!_draw)return;_draw.img=im;drawRedraw();};im.onerror=()=>drawRedraw();im.src=_draw.bg;}
-  else drawRedraw();
+  const fin=()=>{if(premier)drawRecaler();drawRedraw();};
+  if(_draw.bg&&_draw.bg!=='grid'&&_draw.bg!=='white'){const im=new Image();im.onload=()=>{if(!_draw)return;_draw.img=im;fin();};im.onerror=fin;im.src=_draw.bg;}
+  else fin();
 }
 /* Photo prise avec l'appareil ou choisie dans la galerie : devient le fond, les tracés sont conservés */
 function drawBgPhoto(ev){
   const file=ev.target.files&&ev.target.files[0];ev.target.value='';if(!file||!_draw)return;
-  compressPhoto(file,data=>{if(!_draw)return;_draw.bg=data;drawLoadBg();toast('Photo mise en fond.','📷');});
+  compressPhoto(file,data=>{if(!_draw)return;drawMemo();_draw.bg=data;drawLoadBg();toast('Photo mise en fond.','📷');});
 }
 function drawBg(){
   const {ctx,W,H,img,bg}=_draw;ctx.clearRect(0,0,W,H);ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
   if(bg==='grid'){ctx.strokeStyle='#E3E9F0';ctx.lineWidth=1;for(let x=0;x<=W;x+=24){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}for(let y=0;y<=H;y+=24){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}}
-  else if(img){const r=Math.min(W/img.width,H/img.height);const w=img.width*r,h=img.height*r,ox=(W-w)/2,oy=(H-h)/2;_draw.fit={ox,oy,w,h};ctx.drawImage(img,ox,oy,w,h);}
+  else if(img){const b=drawBox();_draw.fit={ox:b.x,oy:b.y,w:b.w,h:b.h};ctx.drawImage(img,b.x,b.y,b.w,b.h);}
 }
-/* Texte lisible sur n'importe quel fond : cartouche blanc derrière */
+/* Texte lisible sur n'importe quel fond : cartouche blanc derrière. Renvoie sa taille (pour la sélection) */
 function drawLabel(ctx,txt,x,y,size,color,angle){
   ctx.save();ctx.translate(x,y);if(angle)ctx.rotate(angle);
   ctx.font=`700 ${size}px Inter,system-ui,sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
   const lines=String(txt).split('\n'),lh=size*1.25,w=Math.max(...lines.map(l=>ctx.measureText(l).width))+size*.7,h=lh*lines.length+size*.35;
   ctx.fillStyle='rgba(255,255,255,.9)';ctx.beginPath();if(ctx.roundRect)ctx.roundRect(-w/2,-h/2,w,h,size*.3);else ctx.rect(-w/2,-h/2,w,h);ctx.fill();
   ctx.fillStyle=color==='#ffffff'?'#1a2430':color;lines.forEach((l,i)=>ctx.fillText(l,0,(i-(lines.length-1)/2)*lh));
-  ctx.restore();
+  ctx.restore();return{w,h};
 }
 function drawStroke(s){
   const {ctx}=_draw;ctx.strokeStyle=ctx.fillStyle=s.color;ctx.lineWidth=s.size;ctx.lineCap='round';ctx.lineJoin='round';
-  if(s.type==='text'){drawLabel(ctx,s.text,s.x,s.y,s.fs,s.color,0);return;}
+  if(s.type==='text'){const d=drawLabel(ctx,s.text,s.x,s.y,s.fs,s.color,0);s._w=d.w;s._h=d.h;return;}
   if(s.type==='line'||s.type==='cote'){
     const [a,b]=s.pts;if(!b)return;
     ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
     if(s.type==='cote'){
       const ang=Math.atan2(b.y-a.y,b.x-a.x),nx=-Math.sin(ang),ny=Math.cos(ang),t=8+s.size*1.5,fl=7+s.size*1.8;
-      /* Traits d'attache perpendiculaires + flèches aux deux bouts */
       for(const [p,dir] of [[a,1],[b,-1]]){
         ctx.beginPath();ctx.moveTo(p.x-nx*t,p.y-ny*t);ctx.lineTo(p.x+nx*t,p.y+ny*t);ctx.stroke();
         const ux=Math.cos(ang)*dir,uy=Math.sin(ang)*dir;
@@ -2450,59 +2483,123 @@ function drawStroke(s){
   }
   ctx.beginPath();s.pts.forEach((p,i)=>{i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});if(s.pts.length===1){ctx.lineTo(s.pts[0].x+0.1,s.pts[0].y+0.1);}ctx.stroke();
 }
-function drawRedraw(){if(!_draw||!_draw.ctx)return;drawBg();_draw.strokes.forEach(drawStroke);if(_draw.cur)drawStroke(_draw.cur);}
+function drawBornes(s){
+  if(s.type==='text'){const w=s._w||40,h=s._h||20;return{x1:s.x-w/2,y1:s.y-h/2,x2:s.x+w/2,y2:s.y+h/2};}
+  const xs=s.pts.map(p=>p.x),ys=s.pts.map(p=>p.y),m=s.size/2+6;
+  return{x1:Math.min(...xs)-m,y1:Math.min(...ys)-m,x2:Math.max(...xs)+m,y2:Math.max(...ys)+m};
+}
+function drawSelection(){
+  const s=_draw.strokes[_draw.sel];if(!s)return;const {ctx}=_draw,b=drawBornes(s);
+  ctx.save();ctx.setLineDash([6,5]);ctx.strokeStyle='#0C508C';ctx.lineWidth=1.5;ctx.strokeRect(b.x1-4,b.y1-4,b.x2-b.x1+8,b.y2-b.y1+8);ctx.setLineDash([]);
+  if(s.type==='line'||s.type==='cote')s.pts.forEach(p=>{ctx.beginPath();ctx.arc(p.x,p.y,10,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.lineWidth=3;ctx.strokeStyle='#0C508C';ctx.stroke();});
+  ctx.restore();
+}
+function drawRedraw(){if(!_draw||!_draw.ctx)return;drawBg();_draw.strokes.forEach(drawStroke);if(_draw.cur)drawStroke(_draw.cur);drawSelection();}
 function drawPos(e){const r=_draw.cv.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top};}
 /* Trait droit : aligné à l'horizontale / verticale quand on en est à moins de 6° */
 function drawSnap(a,b){const dx=b.x-a.x,dy=b.y-a.y,ang=Math.abs(Math.atan2(dy,dx)*180/Math.PI);
   if(ang<6||ang>174)return{x:b.x,y:a.y};if(Math.abs(ang-90)<6)return{x:a.x,y:b.y};return b;}
+const distSeg=(p,a,b)=>{const dx=b.x-a.x,dy=b.y-a.y,l=dx*dx+dy*dy;let t=l?((p.x-a.x)*dx+(p.y-a.y)*dy)/l:0;t=Math.max(0,Math.min(1,t));return Math.hypot(p.x-(a.x+t*dx),p.y-(a.y+t*dy));};
+/* Élément sous le doigt (le plus récent d'abord) */
+function drawToucher(p){
+  for(let i=_draw.strokes.length-1;i>=0;i--){
+    const s=_draw.strokes[i],tol=Math.max(14,s.size/2+10);
+    if(s.type==='text'){const b=drawBornes(s);if(p.x>=b.x1-6&&p.x<=b.x2+6&&p.y>=b.y1-6&&p.y<=b.y2+6)return i;continue;}
+    if(s.pts.length===1){if(Math.hypot(p.x-s.pts[0].x,p.y-s.pts[0].y)<tol)return i;continue;}
+    for(let k=1;k<s.pts.length;k++)if(distSeg(p,s.pts[k-1],s.pts[k])<tol)return i;
+  }
+  return -1;
+}
+/* ── Historique : ↶ / ↷ ── */
+function drawEtat(){return JSON.stringify({s:_draw.strokes.map(({_w,_h,...r})=>r),bg:_draw.bg});}
+function drawMemo(){_draw.undo.push(drawEtat());if(_draw.undo.length>80)_draw.undo.shift();_draw.redo=[];drawMajHisto();}
+function drawRestaurer(t){const o=JSON.parse(t),bgChange=o.bg!==_draw.bg;_draw.strokes=o.s;_draw.sel=-1;_draw.bg=o.bg;if(bgChange)drawLoadBg();else drawRedraw();drawHint();drawMajHisto();}
+function drawUndo(){if(!_draw)return;if(_draw.input)drawCloseInput();if(!_draw.undo.length)return;_draw.redo.push(drawEtat());drawRestaurer(_draw.undo.pop());}
+function drawRedo(){if(!_draw||!_draw.redo.length)return;_draw.undo.push(drawEtat());drawRestaurer(_draw.redo.pop());}
+function drawMajHisto(){const u=document.getElementById('draw-undo'),r=document.getElementById('draw-redo');if(u)u.disabled=!_draw.undo.length;if(r)r.disabled=!_draw.redo.length;}
+
 function drawDown(e){
   if(!_draw)return;e.preventDefault();
   if(_draw.input)drawInputOk();
   const p=drawPos(e);
-  if(_draw.tool==='text'&&!_draw.sign){drawAskText(p,'Texte',{type:'text',x:p.x,y:p.y,color:_draw.color,size:_draw.size,fs:{2:14,4:18,8:26}[_draw.size]||18});return;}
+  if(_draw.tool==='select'&&!_draw.sign){
+    const s=_draw.strokes[_draw.sel];
+    /* bout d'un trait / d'une cote sélectionné(e) */
+    if(s&&(s.type==='line'||s.type==='cote')){const k=s.pts.findIndex(q=>Math.hypot(q.x-p.x,q.y-p.y)<22);if(k>=0){drawMemo();_draw.drag={mode:'bout',k,from:p,moved:false};try{_draw.cv.setPointerCapture(e.pointerId);}catch(_){}return;}}
+    const i=drawToucher(p);_draw.sel=i;drawHint();drawRedraw();
+    if(i>=0){drawMemo();_draw.drag={mode:'tout',from:p,moved:false};try{_draw.cv.setPointerCapture(e.pointerId);}catch(_){}}
+    return;
+  }
+  if(_draw.tool==='text'&&!_draw.sign){drawAskText(p,'Texte',{type:'text',x:p.x,y:p.y,color:_draw.color,size:_draw.size,fs:{2:14,4:18,8:26}[_draw.size]||18},false,'');return;}
   try{_draw.cv.setPointerCapture(e.pointerId);}catch(_){}
   const type=_draw.sign?'pen':_draw.tool;
   _draw.cur={type,color:_draw.color,size:_draw.size,pts:type==='pen'?[p]:[p,p]};drawRedraw();
 }
-function drawMove(e){if(!_draw||!_draw.cur)return;e.preventDefault();const p=drawPos(e);
-  if(_draw.cur.type==='pen')_draw.cur.pts.push(p);else _draw.cur.pts[1]=drawSnap(_draw.cur.pts[0],p);drawRedraw();}
-function drawUp(e){
-  if(!_draw||!_draw.cur)return;const s=_draw.cur;_draw.cur=null;
-  if(s.type!=='pen'){const [a,b]=s.pts;if(Math.hypot(b.x-a.x,b.y-a.y)<8){drawRedraw();return;}}
-  _draw.strokes.push(s);drawRedraw();
-  if(s.type==='cote')drawAskText({x:(s.pts[0].x+s.pts[1].x)/2,y:(s.pts[0].y+s.pts[1].y)/2},'Longueur en mètres',s,true);
+function drawMove(e){
+  if(!_draw)return;
+  if(_draw.drag){e.preventDefault();const p=drawPos(e),d=_draw.drag,s=_draw.strokes[_draw.sel];if(!s)return;
+    const dx=p.x-d.from.x,dy=p.y-d.from.y;if(Math.abs(dx)+Math.abs(dy)>0)d.moved=true;
+    if(d.mode==='bout'){const autre=s.pts[1-d.k];s.pts[d.k]=drawSnap(autre,p);}
+    else{if(s.type==='text'){s.x+=dx;s.y+=dy;}else s.pts=s.pts.map(q=>({x:q.x+dx,y:q.y+dy}));d.from=p;}
+    drawRedraw();return;}
+  if(!_draw.cur)return;e.preventDefault();const p=drawPos(e);
+  if(_draw.cur.type==='pen')_draw.cur.pts.push(p);else _draw.cur.pts[1]=drawSnap(_draw.cur.pts[0],p);drawRedraw();
 }
+function drawUp(e){
+  if(!_draw)return;
+  if(_draw.drag){const d=_draw.drag;_draw.drag=null;if(!d.moved){_draw.undo.pop();drawMajHisto();}drawRedraw();return;}
+  if(!_draw.cur)return;const s=_draw.cur;_draw.cur=null;
+  if(s.type!=='pen'){const [a,b]=s.pts;if(Math.hypot(b.x-a.x,b.y-a.y)<8){drawRedraw();return;}}
+  drawMemo();_draw.strokes.push(s);drawRedraw();
+  if(s.type==='cote')drawAskText({x:(s.pts[0].x+s.pts[1].x)/2,y:(s.pts[0].y+s.pts[1].y)/2},'Longueur en mètres',s,true,'');
+}
+/* ── Élément sélectionné ── */
+function drawEditSel(){const s=_draw.strokes[_draw.sel];if(!s)return;
+  const p=s.type==='text'?{x:s.x,y:s.y}:{x:(s.pts[0].x+s.pts[1].x)/2,y:(s.pts[0].y+s.pts[1].y)/2};
+  drawAskText(p,s.type==='cote'?'Longueur en mètres':'Texte',s,s.type==='cote',s.type==='cote'?String(s.text||'').replace(/\s*m$/,''):s.text,true);}
+function drawDelSel(){if(_draw.sel<0)return;drawMemo();_draw.strokes.splice(_draw.sel,1);_draw.sel=-1;drawHint();drawRedraw();}
+function drawDeselect(){_draw.sel=-1;drawHint();drawRedraw();}
 /* Petite zone de saisie posée sur le dessin (texte libre ou valeur d'une cote) */
-function drawAskText(p,label,target,cote){
+function drawAskText(p,label,target,cote,valeur,edition){
   const box=document.getElementById('draw-input');if(!box)return;
-  _draw.input={target,cote};
+  _draw.input={target,cote,edition};
   box.hidden=false;
   box.innerHTML=`<span>${esc(label)}</span><div style="display:flex;gap:6px;align-items:center">
     <input id="draw-txt" ${cote?'inputmode="decimal" placeholder="ex. 4,50"':'placeholder="Votre texte"'} autocomplete="off">${cote?'<b>m</b>':''}
     <button class="draw-btn go" onclick="drawInputOk()">OK</button><button class="draw-btn" onclick="drawInputCancel()">✕</button></div>`;
   const W=_draw.W,H=_draw.H,bw=Math.min(300,W-16);
   box.style.width=bw+'px';box.style.left=Math.max(8,Math.min(W-bw-8,p.x-bw/2))+'px';box.style.top=Math.max(8,Math.min(H-96,p.y+18))+'px';
-  const inp=document.getElementById('draw-txt');
+  const inp=document.getElementById('draw-txt');inp.value=valeur||'';
   inp.onkeydown=ev=>{if(ev.key==='Enter'){ev.preventDefault();drawInputOk();}else if(ev.key==='Escape')drawInputCancel();};
-  setTimeout(()=>inp.focus(),30);
+  setTimeout(()=>{inp.focus();inp.select();},30);
 }
 function drawInputOk(){
-  if(!_draw||!_draw.input)return;const {target,cote}=_draw.input,inp=document.getElementById('draw-txt');
-  let v=(inp&&inp.value||'').trim();
+  if(!_draw||!_draw.input)return;const {target,cote,edition}=_draw.input,inp=document.getElementById('draw-txt');
+  const v=(inp&&inp.value||'').trim();
+  if(edition&&v!==(cote?String(target.text||'').replace(/\s*m$/,''):target.text))drawMemo();
   if(cote){
     if(v){const n=parseFloat(v.replace(',','.').replace(/[^\d.]/g,''));target.text=isFinite(n)?n.toLocaleString('fr-FR',{minimumFractionDigits:n%1?2:0,maximumFractionDigits:2})+' m':v;}
-  }else if(v){target.text=v;_draw.strokes.push(target);}
-  drawCloseInput();drawRedraw();
+    else if(edition)target.text='';
+  }else if(v){target.text=v;if(!edition){drawMemo();_draw.strokes.push(target);}}
+  drawCloseInput();drawRedraw();drawHint();
 }
-function drawInputCancel(){drawCloseInput();drawRedraw();}   /* cote sans valeur : la flèche reste, on peut annuler */
+function drawInputCancel(){drawCloseInput();drawRedraw();}   /* cote sans valeur : la flèche reste, on peut la modifier ensuite */
 function drawCloseInput(){const box=document.getElementById('draw-input');if(box){box.hidden=true;box.innerHTML='';}if(_draw)_draw.input=null;}
-function drawTool(k,btn){if(_draw.input)drawInputOk();_draw.tool=k;[...btn.parentElement.querySelectorAll('.draw-tool')].forEach(b=>b.classList.toggle('on',b===btn));drawHint();}
-function drawColor(c,btn){_draw.color=c;[...btn.parentElement.querySelectorAll('.draw-sw')].forEach(b=>b.classList.toggle('on',b===btn));}
-function drawSize(s,btn){_draw.size=s;[...btn.parentElement.querySelectorAll('.draw-sz')].forEach(b=>b.classList.toggle('on',b===btn));}
-function drawUndo(){if(_draw.input)drawCloseInput();_draw.strokes.pop();drawRedraw();}
-function drawClear(){drawCloseInput();_draw.strokes=[];drawRedraw();}
+function drawTool(k){if(_draw.input)drawInputOk();_draw.tool=k;if(k!=='select')_draw.sel=-1;
+  document.querySelectorAll('#draw-screen .draw-tool').forEach(b=>b.classList.toggle('on',b.dataset.tool===k));drawHint();drawRedraw();}
+/* Couleur / épaisseur : pour les prochains éléments, et pour l'élément sélectionné */
+function drawColor(c){_draw.color=c;document.querySelectorAll('#draw-screen .draw-sw').forEach(b=>b.classList.toggle('on',b.dataset.col===c));
+  const s=_draw.strokes[_draw.sel];if(s&&s.color!==c){drawMemo();s.color=c;drawRedraw();}}
+function drawSize(n){_draw.size=n;document.querySelectorAll('#draw-screen .draw-sz').forEach(b=>b.classList.toggle('on',+b.dataset.sz===n));
+  const s=_draw.strokes[_draw.sel];if(s&&s.size!==n){drawMemo();s.size=n;if(s.type==='text')s.fs={2:14,4:18,8:26}[n]||18;drawRedraw();}}
+function drawClear(){if(!_draw.strokes.length)return;drawCloseInput();drawMemo();_draw.strokes=[];_draw.sel=-1;drawHint();drawRedraw();}
 function drawCancel(){const o=document.getElementById('draw-screen');if(o)o.classList.remove('open');_draw=null;}
-function drawSave(){if(_draw.input)drawInputOk();const cv=_draw.cv;const out=cv.toDataURL('image/jpeg',0.82);const cb=_draw.onsave;drawCancel();if(cb)cb(out);}
+function drawSave(){
+  if(_draw.input)drawInputOk();_draw.sel=-1;drawRedraw();   /* image finale sans cadre de sélection */
+  const out=_draw.cv.toDataURL('image/jpeg',0.82),cb=_draw.onsave;
+  const calque={bg:_draw.bg||'grid',box:drawBox(),strokes:_draw.strokes.map(({_w,_h,...r})=>r)};
+  drawCancel();if(cb)cb(out,calque);
+}
 
 /* ── Passage signé : liaison Interfast obligatoire ── */
 function openSignForm(id){
