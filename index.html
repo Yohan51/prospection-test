@@ -1791,23 +1791,6 @@ function tblPerfCommerciaux(){
   return `<table><thead><tr><th>Commercial</th><th class="right">Leads</th><th class="right">Ventes</th><th class="right">CA signé</th><th class="right">Pipeline</th></tr></thead><tbody>${rows}</tbody></table>${partagePresent?`<div class="muted" style="font-size:11px;padding:8px 12px">CA réparti au prorata lorsqu'un lead a deux commerciaux (50/50).</div>`:''}`;
 }
 
-function sourcesBreakdown(){
-  const signes=LEADS.filter(l=>l.stage==='signe');
-  if(!signes.length)return emptyMini('Aucune vente pour le moment.');
-  const bySrc={};
-  signes.forEach(l=>{bySrc[l.source]=(bySrc[l.source]||0)+(l.montantHT||l.montant||0);});
-  const total=Object.values(bySrc).reduce((a,b)=>a+b,0);
-  return Object.entries(bySrc).sort((a,b)=>b[1]-a[1]).map(([k,v])=>{
-    const pct=Math.round(v/total*100);
-    return `<div style="margin-bottom:12px">
-      <div class="flex items-center" style="justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:13px;font-weight:500">${esc(srcLabel(k))}</span>
-        <span class="money" style="font-size:13px">${fmtMoney(v)} · ${pct}%</span>
-      </div>
-      <div style="height:7px;background:var(--nuage);border-radius:4px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--vert);border-radius:4px"></div></div>
-    </div>`;
-  }).join('');
-}
 
 /* Tunnel de conversion d'un portefeuille de leads (étapes atteintes, cumulatif) */
 const FUNNEL_ORDER=['nouveau','contact','r1_plan','r1_fait','r2_plan','r2_fait','devis','nego','signe'];
@@ -2433,7 +2416,6 @@ function r1Doc(){
     blocs,pied:'Sublime Toit · Couverture · Rénovation — Marne (51)'};
 }
 function r1Export(format){if(!_r1)return;r1SaveSoon();exporterDoc(r1Doc(),format,'Fiche-R1-'+_r1.lead.nom);}
-function r1Print(){r1Export('pdf');}
 
 /* ═══════════════════════════════════════════════════════════
    EXPORT PDF / JPG (fiche R1, rapport de chantier)
@@ -4059,23 +4041,6 @@ function moveCharge(srcId,targetId,groupType){
   saveStore();renderTreso('charges');toast('Charges réorganisées.');
 }
 
-function tresoEncaissements(){
-  const list=ENCAISSEMENTS.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const total=list.filter(e=>e.statut==='encaisse').reduce((s,e)=>s+e.montant,0);
-  return `<div class="card">
-    <div class="card-hd"><div><h3>Encaissements</h3><div class="sub">Total encaissé : ${fmtMoney(total)}</div></div>
-      <button class="btn btn-primary btn-sm" onclick="openEncForm()">+ Ajouter</button></div>
-    <div class="card-bd flush"><div class="tbl-wrap"><table><thead><tr><th>Libellé</th><th>Date</th><th>Type</th><th>Statut</th><th class="right">Montant</th><th></th></tr></thead><tbody>
-      ${list.map(e=>`<tr>
-        <td class="t-main">${esc(e.libelle)}</td>
-        <td class="nowrap">${fmtDate(e.date)}</td>
-        <td class="muted">${e.type==='chantier'?'Chantier':e.type==='depart'?'Report':'Autre'}</td>
-        <td><span class="chip ${e.statut==='encaisse'?'chip-vert':'chip-ambre'}"><span class="dot"></span>${e.statut==='encaisse'?'Encaissé':'Prévu'}</span></td>
-        <td class="right money">${fmtMoney(e.montant)}</td>
-        <td class="right"><button class="btn btn-ghost btn-sm" onclick="deleteEnc(${e.id})">${icon('trash',15)}</button></td>
-      </tr>`).join('')}
-    </tbody></table></div></div></div>`;
-}
 function openEncForm(){
   const body=`<div class="field"><label>Libellé *</label><input id="en-lib" placeholder="Ex. Acompte chantier, subvention…"></div>
     <div class="form-row">
@@ -4344,14 +4309,8 @@ function fmtMoney(n){return (Math.round(n||0)).toLocaleString('fr-FR')+' €';}
 function isoLocal(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function todayISO(){return isoLocal(new Date());}
 function fmtDate(iso){if(!iso)return'—';const d=new Date(iso+(iso.length<=10?'T00:00':''));return isNaN(d)?iso:d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});}
-function fmtDateShort(iso){if(!iso)return'—';const d=new Date(iso+(iso.length<=10?'T00:00':''));return isNaN(d)?iso:d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});}
 function fmtDateTime(ts){const d=new Date(ts);return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
 /* Trésorerie */
-function totalChargesMensuelles(){return CHARGES.filter(c=>c.actif!==false).reduce((s,c)=>s+(c.montant||0),0);}
-function soldeTresorerie(){
-  const entrees=ENCAISSEMENTS.filter(e=>e.statut==='encaisse').reduce((s,e)=>s+e.montant,0);
-  return entrees; /* vue simplifiée : trésorerie = départ + encaissements (les charges mensuelles se soustraient dans la vue trésorerie) */
-}
 function toast(msg,ic){
   const s=document.getElementById('toast-stack');
   const t=document.createElement('div');t.className='toast';
