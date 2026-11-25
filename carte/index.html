@@ -979,7 +979,7 @@ function envoyerSms(x) {
   const num = telR1(x.p); if (!num) return toast('Pas de numéro de portable pour ce client.');
   x.p[x.champ] = { cle: x.cle, envoye: maintenant(), maj: maintenant(), par: etat.moi };
   sauver(); dessiner();
-  ouvrirUrl('sms:' + num + '&body=' + encodeURIComponent(texteSms(x)));
+  ouvrirUrl('sms:' + num + (/android/i.test(navigator.userAgent) ? '?' : '&') + 'body=' + encodeURIComponent(texteSms(x)));
 }
 function ignorerSms(x) {
   x.p[x.champ] = { cle: x.cle, ignore: true, maj: maintenant(), par: etat.moi };
@@ -1119,6 +1119,12 @@ async function ajouterAuCalendrier(p, ev) {
   // On passe par l'appli Raccourcis : le raccourci « Ajouter R1 » crée l'évènement (R1, R2 ou rappel).
   if (/iphone|ipad|ipod/i.test(navigator.userAgent)) {
     ouvrirUrl('shortcuts://run-shortcut?name=' + encodeURIComponent(NOM_RACCOURCI) + '&input=text&text=' + encodeURIComponent(JSON.stringify(donneesRaccourci(p, ev))));
+    return;
+  }
+  // Android : Google Agenda s'ouvre avec le rendez-vous pré-rempli
+  if (/android/i.test(navigator.userAgent)) {
+    const d = x => x.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+    window.open('https://calendar.google.com/calendar/render?' + new URLSearchParams({ action: 'TEMPLATE', text: ev.titre, dates: d(ev.debut) + '/' + d(ev.fin), details: ev.notes || '', location: ev.lieu || '' }), '_blank');
     return;
   }
   const nom = `${cleAdresse(ev.titre).replace(/ /g, '-').slice(0, 50) || 'rendez-vous'}.ics`;

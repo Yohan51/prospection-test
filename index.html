@@ -4487,7 +4487,7 @@ function envoyerSmsRdv(id,rappel){
   const num=telSmsPf(l.tel);if(!num){toast('Pas de numéro de portable pour ce client.','⚠️');return;}
   r[rappel?'rappel':'sms']={cle:cleRdv(r),envoye:Date.now()};saveStore();
   logAct((rappel?'Rappel':'Confirmation')+' '+r.type+' envoyé(e) par SMS',l.nom);
-  location.href='sms:'+num+'&body='+encodeURIComponent(texteSmsRdv(r,l,rappel));
+  location.href='sms:'+num+(/android/i.test(navigator.userAgent)?'?':'&')+'body='+encodeURIComponent(texteSmsRdv(r,l,rappel));   /* Android : « ?body= », iPhone : « &body= » */
   setTimeout(()=>{majJournee();if(document.getElementById('modal-bd').classList.contains('open')&&_leadOuvert===l.id)openLeadDetail(l.id);},400);
 }
 
@@ -4507,6 +4507,10 @@ function icsRdv(ev){
     `DTSTART:${icsD(ev.debut)}`,`DTEND:${icsD(ev.fin)}`,`SUMMARY:${icsEchap(ev.titre)}`,`LOCATION:${icsEchap(ev.lieu)}`,`DESCRIPTION:${icsEchap(ev.notes)}`,
     'BEGIN:VALARM','ACTION:DISPLAY','TRIGGER:-PT1H',`DESCRIPTION:${icsEchap(ev.titre+' dans 1 heure')}`,'END:VALARM','END:VEVENT','END:VCALENDAR'].map(icsPlie).join('\r\n')+'\r\n';
 }
+function lienGoogleAgenda(ev){
+  const p=new URLSearchParams({action:'TEMPLATE',text:ev.titre,dates:icsD(ev.debut)+'/'+icsD(ev.fin),details:ev.notes||'',location:ev.lieu||''});
+  return 'https://calendar.google.com/calendar/render?'+p.toString();
+}
 function calendrierRdv(id){
   const r=RDVS.find(x=>x.id===id),l=r&&LEADS.find(x=>x.id===r.leadId);if(!l)return;
   const ev=evenementRdv(r,l);
@@ -4515,6 +4519,8 @@ function calendrierRdv(id){
     location.href='shortcuts://run-shortcut?name='+encodeURIComponent(NOM_RACCOURCI)+'&input=text&text='+encodeURIComponent(JSON.stringify({titre:ev.titre,debut:f(ev.debut),fin:f(ev.fin),lieu:ev.lieu,notes:ev.notes}));
     return;
   }
+  /* Android : Google Agenda s'ouvre avec le rendez-vous déjà rempli (il suffit d'appuyer sur Enregistrer) */
+  if(/android/i.test(navigator.userAgent)){window.open(lienGoogleAgenda(ev),'_blank');return;}
   const url=URL.createObjectURL(new Blob([icsRdv(ev)],{type:'text/calendar;charset=utf-8'}));
   const a=document.createElement('a');a.href=url;a.download=`${r.type}-${String(l.nom).replace(/[^\wÀ-ÿ]+/g,'-').slice(0,40)}.ics`;
   document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1500);
