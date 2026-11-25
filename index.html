@@ -286,6 +286,8 @@ textarea.r1-in{min-height:78px;resize:vertical;}
 .r1-tile .r1-tbar button.del:hover{background:var(--rouge-pale);color:var(--rouge);}
 .r1-tile .r1-tbar button+button{border-left:1px solid var(--trait);}
 .r1-addtile{border:2px dashed var(--trait);border-radius:var(--r-m);min-height:170px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--ardoise);cursor:pointer;background:var(--blanc);transition:all .14s;}
+.cr-choix{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;}
+.cr-choix .r1-addtile{min-height:112px;padding:8px;text-align:center;}
 .r1-addtile:hover{border-color:var(--vert);color:var(--vert-fonce);background:var(--vert-pale);}
 /* Écran de dessin / annotation */
 .draw-screen{position:fixed;inset:0;z-index:700;background:#1a2430;display:none;flex-direction:column;}
@@ -1426,7 +1428,7 @@ VIEWS.dashboard=function(){
   const body=ids.map(id=>{try{return DASH_WIDGETS[id].render()||'';}catch(e){console.warn('widget',id,e);return '';}}).join('');
   return `${['direction','commercial'].includes(r)?bandeauSauvegarde():''}<div class="toolbar">
       <div><h2 style="margin:0">${esc(dashTitle(r))}</h2><div class="muted" style="font-size:13px">Vue personnalisable — ${ids.length} bloc(s) affiché(s)</div></div>
-      <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="openDashConfig()">Personnaliser</button>
+      <span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">${['direction','commercial'].includes(r)?`<button class="btn btn-primary btn-sm" onclick="openCroquisRapide()">✏️ Croquis</button>`:''}<button class="btn btn-outline btn-sm" onclick="openDashConfig()">Personnaliser</button></span>
     </div>
     ${body||`<div class="empty"><div class="em-ic">${icon('dashboard',40)}</div><b>Aucun bloc affiché</b><p>Cliquez sur « Personnaliser » pour choisir les blocs à afficher.</p></div>`}`;
 };
@@ -2350,6 +2352,43 @@ function r1CroquisBody(){
 }
 function r1Calques(){if(!Array.isArray(_r1.data.croquisCalques))_r1.data.croquisCalques=[];return _r1.data.croquisCalques;}
 function r1NewCroquis(bg){openDraw({bg:bg||'grid',photo:true,title:bg?'Croquis sur photo':'Croquis à main levée',onsave:(d,cal)=>{_r1.data.croquis.push(d);r1Calques()[_r1.data.croquis.length-1]=cal;r1SaveSoon();r1RenderBody();r1Touch();}});}
+/* ═══ Croquis depuis le tableau de bord ═══
+   Rattaché à un prospect : il s'ajoute à sa fiche R1 (comme depuis la fiche).
+   Libre : il n'est pas gardé, on le partage ou on l'enregistre en JPG à la fin. */
+let _croquisRapide=null;
+function openCroquisRapide(){
+  const ids=rdvsJournee(0).filter(x=>!x.passe).map(x=>x.l.id);
+  const leads=myLeads().filter(l=>!stage(l.stage).lost).sort((a,b)=>(ids.includes(b.id)-ids.includes(a.id))||String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  const def=ids[0]||'';
+  openModal('Nouveau croquis','Choisissez le fond, puis dessinez',`
+    <div class="field"><label>Rattacher le croquis à</label>
+      <select id="cr-lead"><option value="">Aucun prospect (croquis libre, à partager)</option>
+      ${leads.map(l=>`<option value="${l.id}" ${l.id===def?'selected':''}>${esc(l.nom)}${l.ville?' — '+esc(l.ville):''}${ids.includes(l.id)?' (RDV aujourd’hui)':''}</option>`).join('')}</select></div>
+    <div class="cr-choix">
+      <button class="r1-addtile" onclick="croquisRapide()">${icon('edit',30)}<span style="font-size:13px;font-weight:600">Sur grille</span></button>
+      <label class="r1-addtile">${icon('camera',30)}<span style="font-size:13px;font-weight:600">Sur photo<br><span style="font-weight:400">(appareil)</span></span><input type="file" accept="image/*" capture="environment" style="display:none" onchange="croquisRapidePhoto(event)"></label>
+      <label class="r1-addtile">${icon('photo',30)}<span style="font-size:13px;font-weight:600">Sur photo<br><span style="font-weight:400">(galerie)</span></span><input type="file" accept="image/*" style="display:none" onchange="croquisRapidePhoto(event)"></label>
+    </div>`,`<button class="btn btn-ghost" onclick="closeModal()">Annuler</button>`);
+}
+function croquisRapidePhoto(ev){const file=ev.target.files&&ev.target.files[0];ev.target.value='';if(!file)return;compressPhoto(file,data=>croquisRapide(data));}
+function croquisRapide(bg){
+  const id=+val('cr-lead')||0,l=id?LEADS.find(x=>x.id===id):null;closeModal();
+  openDraw({bg:bg||'grid',photo:true,title:l?'Croquis — '+l.nom:'Croquis libre',nom:'Croquis'+(l?' '+l.nom:''),
+    onsave:(d,cal)=>{
+      if(l){r1EnsureData(l);l.r1.croquis.push(d);(Array.isArray(l.r1.croquisCalques)?l.r1.croquisCalques:(l.r1.croquisCalques=[]))[l.r1.croquis.length-1]=cal;
+        l.r1.updatedAt=todayISO();logAct('Croquis ajouté',l.nom);saveStore();
+        toast('Croquis ajouté à la fiche R1 de '+l.nom,'✏️');return;}
+      _croquisRapide=d;
+      openModal('Croquis libre','Il n’est pas enregistré dans l’application',`<img src="${d}" alt="Croquis" style="width:100%;border:1px solid var(--trait);border-radius:var(--r-m)">`,
+        `<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-outline" onclick="croquisLibreExport('jpg')">⤓ JPG</button><button class="btn btn-primary" onclick="croquisLibreExport('partage')">⇪ Partager</button>`);
+    }});
+}
+function croquisLibreExport(mode){
+  if(!_croquisRapide)return;const blob=dataUrlVersBlob(_croquisRapide),nom=nomFichier('Croquis '+todayISO(),'jpg'),f=new File([blob],nom,{type:'image/jpeg'});
+  if(mode==='partage'&&navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:'Croquis'}).catch(()=>{});return;}
+  if(mode==='partage')toast('Partage non disponible sur cet appareil : l’image est enregistrée.','ℹ️');
+  donnerFichier(blob,nom,'Croquis');
+}
 function r1CroquisPhoto(ev){const file=ev.target.files&&ev.target.files[0];ev.target.value='';if(!file)return;compressPhoto(file,data=>r1NewCroquis(data));}
 function r1EditCroquis(i){const cal=r1Calques()[i];openDraw({bg:_r1.data.croquis[i],calque:cal||null,photo:true,title:'Modifier le croquis',onsave:(d,c)=>{_r1.data.croquis[i]=d;r1Calques()[i]=c;r1SaveSoon();r1RenderBody();}});}
 function r1DelCroquis(i){confirmModal('Supprimer le croquis','Retirer ce croquis ?',()=>{_r1.data.croquis.splice(i,1);r1Calques().splice(i,1);r1SaveSoon();r1RenderBody();r1Touch();},'Supprimer',true);}
@@ -2514,10 +2553,23 @@ function nomFichier(base,ext){return String(base).normalize('NFD').replace(/[̀-
 /* Donne le fichier : menu Partager sur iPhone/iPad (Enregistrer dans Fichiers ou Photos, Mail, Imprimer…), téléchargement sinon */
 async function donnerFichier(blob,nom,titre){
   const f=new File([blob],nom,{type:blob.type});
-  if(estIOS()&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:titre});}catch(e){}return;}
+  if(estIOS()&&navigator.canShare&&navigator.canShare({files:[f]})){
+    try{await navigator.share({files:[f],title:titre});}
+    catch(e){if(e.name==='NotAllowedError')proposerPartage(f,titre);}
+    return;}
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=nom;document.body.appendChild(a);a.click();
   setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},4000);toast('Fichier enregistré : '+nom);
 }
+/* L'iPhone n'autorise le menu Partager que juste après un toucher : si la préparation a été trop longue, on redemande un toucher */
+let _fichierAPartager=null;
+function proposerPartage(f,titre){
+  _fichierAPartager={f,titre};
+  openModal('Fichier prêt',esc(f.name),`<p style="font-size:13.5px;color:var(--ardoise)">Le fichier est prêt. Touchez le bouton pour l’envoyer ou l’enregistrer.</p>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="partagerFichierPret()">⇪ Partager</button>`);
+}
+function partagerFichierPret(){const x=_fichierAPartager;if(!x)return;closeModal();navigator.share({files:[x.f],title:x.titre}).catch(()=>{});}
+/* Image (data URL) → fichier, sans attente : le menu Partager s'ouvre dans la foulée du toucher */
+function dataUrlVersBlob(d){const [t,b]=d.split(','),bin=atob(b),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new Blob([u],{type:(t.match(/:(.*?);/)||[])[1]||'image/jpeg'});}
 let _exportEnCours=false;
 async function exporterDoc(doc,format,nomBase){
   if(_exportEnCours)return;_exportEnCours=true;
@@ -2769,7 +2821,7 @@ function drawCancel(){const o=document.getElementById('draw-screen');if(o)o.clas
 /* Partager / exporter le croquis tel qu'il est à l'écran, sans fermer l'éditeur (on peut ensuite le valider dans la fiche) */
 async function drawExporter(mode){
   if(!_draw)return;if(_draw.input)drawInputOk();const sel=_draw.sel;_draw.sel=-1;drawRedraw();
-  const blob=await canvasJpeg(_draw.cv,.9);_draw.sel=sel;drawRedraw();
+  const blob=dataUrlVersBlob(_draw.cv.toDataURL('image/jpeg',.9));_draw.sel=sel;drawRedraw();
   const nom=nomFichier(_draw.nom+' '+todayISO(),'jpg'),f=new File([blob],nom,{type:'image/jpeg'});
   if(mode==='partage'){
     if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:_draw.nom});}catch(e){}return;}
