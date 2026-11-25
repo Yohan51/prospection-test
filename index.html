@@ -2513,6 +2513,8 @@ function openDraw(opts){
       <button class="draw-sz on" data-sz="4" onclick="drawSize(4)" title="Moyen">•</button>
       <button class="draw-sz" data-sz="8" onclick="drawSize(8)" title="Épais">⬤</button></div>`}
       ${opts.photo?`<label class="draw-btn" title="Mettre une photo en fond">📷 Photo de fond<input type="file" accept="image/*" style="display:none" onchange="drawBgPhoto(event)"></label>`:''}
+      ${sign?'':`<div class="draw-grp"><button class="draw-btn" onclick="drawExporter('partage')" title="Envoyer le croquis (SMS, Mail, WhatsApp…)">⇪ Partager</button>
+      <button class="draw-btn" onclick="drawExporter('jpg')" title="Enregistrer le croquis en image JPG">⤓ JPG</button></div>`}
       <div class="draw-grp"><button class="draw-btn" onclick="drawClear()">Tout effacer</button>
       <button class="draw-btn" onclick="drawCancel()">Fermer</button>
       <button class="draw-btn go" onclick="drawSave()">Valider</button></div>
@@ -2520,7 +2522,7 @@ function openDraw(opts){
     <div class="draw-hint" id="draw-hint"></div>
     <div class="draw-canvas-wrap" id="draw-wrap"><canvas id="draw-cv"></canvas><div class="draw-input" id="draw-input" hidden></div></div>`;
   _draw={tool:'pen',color:sign?'#1a2430':'#0C508C',size:sign?3:4,strokes:cal?JSON.parse(JSON.stringify(cal.strokes||[])):[],cur:null,
-    bg:cal?cal.bg:opts.bg,img:null,onsave:opts.onsave,fit:null,sign,undo:[],redo:[],sel:-1,drag:null,ancienBox:cal?cal.box:null};
+    bg:cal?cal.bg:opts.bg,img:null,onsave:opts.onsave,nom:opts.nom||((opts.photo?'Croquis':'Photo annotee')+(typeof _r1!=='undefined'&&_r1&&_r1.lead?' '+_r1.lead.nom:'')),fit:null,sign,undo:[],redo:[],sel:-1,drag:null,ancienBox:cal?cal.box:null};
   drawHint();drawMajHisto();
   requestAnimationFrame(()=>drawInit());
 }
@@ -2714,6 +2716,17 @@ function drawSize(n){_draw.size=n;document.querySelectorAll('#draw-screen .draw-
   const s=_draw.strokes[_draw.sel];if(s&&s.size!==n){drawMemo();s.size=n;if(s.type==='text')s.fs={2:14,4:18,8:26}[n]||18;drawRedraw();}}
 function drawClear(){if(!_draw.strokes.length)return;drawCloseInput();drawMemo();_draw.strokes=[];_draw.sel=-1;drawHint();drawRedraw();}
 function drawCancel(){const o=document.getElementById('draw-screen');if(o)o.classList.remove('open');_draw=null;}
+/* Partager / exporter le croquis tel qu'il est à l'écran, sans fermer l'éditeur (on peut ensuite le valider dans la fiche) */
+async function drawExporter(mode){
+  if(!_draw)return;if(_draw.input)drawInputOk();const sel=_draw.sel;_draw.sel=-1;drawRedraw();
+  const blob=await canvasJpeg(_draw.cv,.9);_draw.sel=sel;drawRedraw();
+  const nom=nomFichier(_draw.nom+' '+todayISO(),'jpg'),f=new File([blob],nom,{type:'image/jpeg'});
+  if(mode==='partage'){
+    if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:_draw.nom});}catch(e){}return;}
+    toast('Partage non disponible sur cet appareil : l’image est enregistrée.','ℹ️');
+  }
+  await donnerFichier(blob,nom,_draw.nom);
+}
 function drawSave(){
   if(_draw.input)drawInputOk();_draw.sel=-1;drawRedraw();   /* image finale sans cadre de sélection */
   const out=_draw.cv.toDataURL('image/jpeg',0.82),cb=_draw.onsave;
