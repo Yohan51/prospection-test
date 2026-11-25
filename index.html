@@ -2336,7 +2336,7 @@ function r1RecapBody(){
       <div class="muted" style="font-size:12px;margin-top:8px">${nbPh} photo(s) · ${nbCr} croquis</div>
     </div>
     <div class="flex gap" style="flex-wrap:wrap;margin-top:4px">
-      <button class="btn btn-outline" onclick="r1Print()">Imprimer / PDF</button>
+      <span class="muted" style="font-size:12.5px;align-self:center">Exporter la fiche :</span>${boutonsExport('r1Export')}
     </div>`;
 }
 function r1Rec(k,v){_r1.data.recap[k]=v;r1SaveSoon();r1Touch();}
@@ -2349,25 +2349,144 @@ function r1Finalize(){
   saveStore();toast('Fiche R1 enregistrée sur le prospect.');
   r1Close();
 }
-function r1Print(){
-  const l=_r1.lead;const d=_r1.data;
-  const sec=R1_STEPS.filter(s=>s.fields).map(s=>{
-    const dd=d[s.key]||{};const lines=s.fields.filter(f=>dd[f.k]!==''&&dd[f.k]!=null).map(f=>`<tr><td style="color:#667;padding:2px 10px 2px 0">${esc(f.label)}</td><td><b>${esc(String(dd[f.k]))}</b></td></tr>`).join('');
-    return lines?`<div class="rep-sec"><h4>${esc(s.label)}</h4><table>${lines}</table></div>`:'';
-  }).join('');
-  const r=d.recap||{};
-  const photos=d.photos.length?`<div class="rep-sec"><h4>Photos</h4><div class="rep-gal">${d.photos.map(p=>`<img src="${p.src}">`).join('')}</div></div>`:'';
-  const croquis=d.croquis.length?`<div class="rep-sec"><h4>Croquis</h4><div class="rep-gal">${d.croquis.map(s=>`<img src="${s}">`).join('')}</div></div>`:'';
-  const body=`<div class="rep-head"><div><div style="font-family:'Plus Jakarta Sans';font-weight:800;color:#083A66;font-size:20px">Fiche R1 — Sublime Toit</div>
-      <div style="color:#667;font-size:13px">${esc(l.nom)} · ${esc(l.adresse||'')} ${esc(l.cp||'')} ${esc(l.ville||'')}</div>
-      <div style="color:#667;font-size:12px">Visite du ${fmtDate(d.updatedAt||d.createdAt)} · ${esc(prest(l.prestation).label)}</div></div>
-      <img src="${LOGO_URI}" style="height:40px"></div>
-    ${sec}
-    ${r.preconisations?`<div class="rep-sec"><h4>Travaux préconisés</h4><p style="white-space:pre-wrap">${esc(r.preconisations)}</p></div>`:''}
-    ${(r.estimBasse||r.estimHaute)?`<div class="rep-sec"><h4>Estimation indicative</h4><p>${r.estimBasse?fmtMoney(r.estimBasse):'—'} à ${r.estimHaute?fmtMoney(r.estimHaute):'—'} HT${r.suite?' · '+esc(r.suite):''}</p></div>`:''}
-    ${photos}${croquis}
-    ${d.signature?`<div class="rep-sec"><h4>Signature du client</h4><img src="${d.signature}" style="max-height:110px"></div>`:''}`;
-  openModal('Fiche R1 — '+l.nom,'Aperçu imprimable',body,`<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-primary" onclick="window.print()">Imprimer</button>`,true);
+function r1Doc(){
+  const l=_r1.lead,d=_r1.data,r=d.recap||{},blocs=[];
+  R1_STEPS.filter(st=>st.fields).forEach(st=>{
+    const dd=d[st.key]||{},rows=st.fields.filter(f=>dd[f.k]!==''&&dd[f.k]!=null).map(f=>[f.label,String(dd[f.k])]);
+    if(rows.length)blocs.push({t:'sec',titre:st.label},{t:'rows',rows});
+  });
+  if(r.preconisations)blocs.push({t:'sec',titre:'Travaux préconisés'},{t:'p',texte:r.preconisations});
+  if(r.estimBasse||r.estimHaute||r.suite){const rows=[];if(r.estimBasse||r.estimHaute)rows.push(['Estimation indicative',`${r.estimBasse?fmtMoney(r.estimBasse):'—'} à ${r.estimHaute?fmtMoney(r.estimHaute):'—'} HT`]);if(r.suite)rows.push(['Prochaine étape',r.suite]);blocs.push({t:'sec',titre:'Suite'},{t:'rows',rows});}
+  if(d.photos.length)blocs.push({t:'sec',titre:'Photos'},{t:'imgs',srcs:d.photos.map(p=>p.src)});
+  if(d.croquis.length)blocs.push({t:'sec',titre:'Croquis'},{t:'imgs',srcs:d.croquis.slice()});
+  if(d.signature)blocs.push({t:'sec',titre:'Signature du client'},{t:'sig',src:d.signature});
+  return{titre:'Fiche R1 — Visite technique',sousTitre:[[l.nom,[l.adresse,[l.cp,l.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ')].filter(Boolean).join(' · '),`Visite du ${fmtDate(d.updatedAt||d.createdAt)} · ${prest(l.prestation).label}`],
+    blocs,pied:'Sublime Toit · Couverture · Rénovation — Marne (51)'};
+}
+function r1Export(format){if(!_r1)return;r1SaveSoon();exporterDoc(r1Doc(),format,'Fiche-R1-'+_r1.lead.nom);}
+function r1Print(){r1Export('pdf');}
+
+/* ═══════════════════════════════════════════════════════════
+   EXPORT PDF / JPG (fiche R1, rapport de chantier)
+   Le document est dessiné page par page (A4, 150 dpi), puis :
+   – PDF : les pages assemblées dans un vrai fichier PDF ;
+   – JPG : une seule image, toutes les pages à la suite ;
+   – Imprimer : le PDF, ouvert pour impression (ordinateur) ou via le menu Partager → Imprimer (iPhone).
+   Plus de dépendance à la boîte d'impression du navigateur, peu fiable sur iPhone.
+═══════════════════════════════════════════════════════════ */
+const DOC_W=1240,DOC_H=1754,DOC_M=86;
+const chargerImg=src=>new Promise(ok=>{if(!src)return ok(null);const i=new Image();i.onload=()=>ok(i);i.onerror=()=>ok(null);i.src=src;});
+function couperTexte(ctx,txt,maxW){
+  const out=[];for(const para of String(txt||'').split('\n')){let l='';
+    for(const mot of para.split(/\s+/)){const t=l?l+' '+mot:mot;if(ctx.measureText(t).width>maxW&&l){out.push(l);l=mot;}else l=t;}
+    out.push(l);}
+  return out;
+}
+/* doc = {titre, sousTitre:[lignes], blocs:[{t:'sec',titre}|{t:'rows',rows:[[lib,val]]}|{t:'p',texte}|{t:'imgs',srcs}|{t:'sig',src}], pied} */
+async function rendreDoc(doc,paginer){
+  const srcs=new Set();doc.blocs.forEach(b=>{if(b.t==='imgs')b.srcs.forEach(s=>srcs.add(s));if(b.t==='sig'&&b.src)srcs.add(b.src);});
+  const imgs=new Map();await Promise.all([...srcs,LOGO_URI].map(async s=>imgs.set(s,await chargerImg(s))));
+  const m=document.createElement('canvas').getContext('2d');
+  const F={titre:"800 46px 'Plus Jakarta Sans',Inter,sans-serif",sous:"500 25px Inter,sans-serif",sec:"700 27px 'Plus Jakarta Sans',Inter,sans-serif",lib:"500 23px Inter,sans-serif",val:"600 24px Inter,sans-serif",p:"400 24px Inter,sans-serif",pied:"400 19px Inter,sans-serif"};
+  const pages=[[]];let page=pages[0],y=0;const bas=()=>DOC_H-DOC_M-40;
+  const op=o=>page.push(o);
+  const entete=premiere=>{
+    if(premiere){
+      op({t:'rect',x:0,y:0,w:DOC_W,h:190,c:'#083A66'});
+      const lg=imgs.get(LOGO_URI);if(lg){const h=92,w=lg.width*h/lg.height;op({t:'rect',x:DOC_W-DOC_M-w-20,y:49,w:w+20,h:h+12,c:'#fff',r:14});op({t:'img',im:lg,x:DOC_W-DOC_M-w-10,y:55,w,h});}
+      op({t:'txt',x:DOC_M,y:92,s:doc.titre,f:F.titre,c:'#fff'});
+      (doc.sousTitre||[]).slice(0,2).forEach((l,i)=>op({t:'txt',x:DOC_M,y:132+i*32,s:l,f:F.sous,c:'rgba(255,255,255,.82)'}));
+      y=240;
+    }else{op({t:'txt',x:DOC_M,y:70,s:doc.titre+' (suite)',f:F.sous,c:'#7a8796'});op({t:'line',x1:DOC_M,y1:88,x2:DOC_W-DOC_M,y2:88,c:'#dfe5ec'});y=130;}
+  };
+  const place=h=>{if(paginer&&y+h>bas()){page=[];pages.push(page);entete(false);}};
+  entete(true);
+  const larg=DOC_W-2*DOC_M,colLib=360;
+  /* Un titre de section n'est jamais laissé seul en bas de page : on réserve aussi la place du début de son contenu */
+  const debutDe=b=>!b?0:b.t==='imgs'||b.t==='sig'?(b.t==='sig'?200:300):b.t==='rows'?60:50;
+  for(let bi=0;bi<doc.blocs.length;bi++){const b=doc.blocs[bi];
+    if(b.t==='sec'){place(90+debutDe(doc.blocs[bi+1]));y+=26;op({t:'txt',x:DOC_M,y:y+26,s:b.titre.toUpperCase(),f:F.sec,c:'#0C508C'});y+=42;op({t:'line',x1:DOC_M,y1:y,x2:DOC_W-DOC_M,y2:y,c:'#dfe5ec'});y+=22;}
+    else if(b.t==='rows'){for(const [lib,val] of b.rows){m.font=F.lib;const ll=couperTexte(m,lib,colLib-20);m.font=F.val;const lv=couperTexte(m,val,larg-colLib);
+      const n=Math.max(ll.length,lv.length),h=n*34+10;place(h);
+      ll.forEach((l,i)=>op({t:'txt',x:DOC_M,y:y+26+i*34,s:l,f:F.lib,c:'#6b7785'}));lv.forEach((l,i)=>op({t:'txt',x:DOC_M+colLib,y:y+26+i*34,s:l,f:F.val,c:'#1a2430'}));y+=h;}}
+    else if(b.t==='p'){m.font=F.p;for(const l of couperTexte(m,b.texte,larg)){place(36);op({t:'txt',x:DOC_M,y:y+28,s:l,f:F.p,c:'#1a2430'});y+=36;}y+=8;}
+    else if(b.t==='imgs'){
+      const gap=24,cw=(larg-gap)/2,maxH=440;let rang=[];
+      const poser=()=>{if(!rang.length)return;const h=Math.max(...rang.map(r=>r.h));place(h+gap);rang.forEach((r,i)=>op({t:'img',im:r.im,x:DOC_M+i*(cw+gap)+(cw-r.w)/2,y:y,w:r.w,h:r.h,cadre:true}));y+=h+gap;rang=[];};
+      for(const s of b.srcs){const im=imgs.get(s);if(!im)continue;const k=Math.min(cw/im.width,maxH/im.height);rang.push({im,w:im.width*k,h:im.height*k});if(rang.length===2)poser();}
+      poser();
+    }
+    else if(b.t==='sig'){const im=imgs.get(b.src);if(!im)continue;const k=Math.min(420/im.width,170/im.height);place(im.height*k+20);op({t:'img',im,x:DOC_M,y,w:im.width*k,h:im.height*k,cadre:true});y+=im.height*k+20;}
+  }
+  /* Dessin */
+  const N=pages.length,hauteur=paginer?DOC_H:Math.ceil(y+DOC_M+50);
+  return pages.map((ops,i)=>{
+    const cv=document.createElement('canvas');cv.width=DOC_W;cv.height=hauteur;const c=cv.getContext('2d');
+    c.fillStyle='#fff';c.fillRect(0,0,DOC_W,hauteur);c.textBaseline='alphabetic';
+    for(const o of ops){
+      if(o.t==='rect'){c.fillStyle=o.c;c.beginPath();if(o.r&&c.roundRect)c.roundRect(o.x,o.y,o.w,o.h,o.r);else c.rect(o.x,o.y,o.w,o.h);c.fill();}
+      else if(o.t==='txt'){c.font=o.f;c.fillStyle=o.c;c.fillText(o.s,o.x,o.y);}
+      else if(o.t==='line'){c.strokeStyle=o.c;c.lineWidth=2;c.beginPath();c.moveTo(o.x1,o.y1);c.lineTo(o.x2,o.y2);c.stroke();}
+      else if(o.t==='img'){c.drawImage(o.im,o.x,o.y,o.w,o.h);if(o.cadre){c.strokeStyle='#dfe5ec';c.lineWidth=2;c.strokeRect(o.x,o.y,o.w,o.h);}}
+    }
+    c.font=F.pied;c.fillStyle='#8a95a3';
+    if(doc.pied)c.fillText(doc.pied,DOC_M,hauteur-44);
+    if(paginer){c.textAlign='right';c.fillText(`${i+1} / ${N}`,DOC_W-DOC_M,hauteur-44);c.textAlign='left';}
+    return cv;
+  });
+}
+const canvasJpeg=(cv,q)=>new Promise(ok=>cv.toBlob(b=>ok(b),'image/jpeg',q||.86));
+/* PDF minimal : une image JPEG pleine page A4 par page */
+async function pdfDepuisPages(pages){
+  const enc=new TextEncoder(),morceaux=[],xref=[];let taille=0;
+  const ajout=x=>{const u=typeof x==='string'?enc.encode(x):x;morceaux.push(u);taille+=u.length;};
+  const objet=(n,corps)=>{xref[n]=taille;ajout(`${n} 0 obj\n`);corps();ajout('\nendobj\n');};
+  ajout('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+  const N=pages.length,PW=595.28,PH=841.89;
+  const jpgs=[];for(const p of pages)jpgs.push(new Uint8Array(await (await canvasJpeg(p,.85)).arrayBuffer()));
+  objet(1,()=>ajout('<< /Type /Catalog /Pages 2 0 R >>'));
+  objet(2,()=>ajout(`<< /Type /Pages /Count ${N} /Kids [${pages.map((_,i)=>`${3+i*3} 0 R`).join(' ')}] >>`));
+  pages.forEach((p,i)=>{
+    const po=3+i*3,io=po+1,co=po+2,flux=`q ${PW} 0 0 ${PH} 0 0 cm /Im0 Do Q`;
+    objet(po,()=>ajout(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im0 ${io} 0 R >> >> /Contents ${co} 0 R >>`));
+    objet(io,()=>{ajout(`<< /Type /XObject /Subtype /Image /Width ${p.width} /Height ${p.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpgs[i].length} >>\nstream\n`);ajout(jpgs[i]);ajout('\nendstream');});
+    objet(co,()=>ajout(`<< /Length ${flux.length} >>\nstream\n${flux}\nendstream`));
+  });
+  const total=3+N*3,debutXref=taille;
+  ajout(`xref\n0 ${total}\n0000000000 65535 f \n`);
+  for(let n=1;n<total;n++)ajout(String(xref[n]).padStart(10,'0')+' 00000 n \n');
+  ajout(`trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${debutXref}\n%%EOF`);
+  return new Blob(morceaux,{type:'application/pdf'});
+}
+const estIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+function nomFichier(base,ext){return String(base).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w]+/g,'-').replace(/^-|-$/g,'').slice(0,60)+'.'+ext;}
+/* Donne le fichier : menu Partager sur iPhone/iPad (Enregistrer dans Fichiers ou Photos, Mail, Imprimer…), téléchargement sinon */
+async function donnerFichier(blob,nom,titre){
+  const f=new File([blob],nom,{type:blob.type});
+  if(estIOS()&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:titre});}catch(e){}return;}
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=nom;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},4000);toast('Fichier enregistré : '+nom);
+}
+let _exportEnCours=false;
+async function exporterDoc(doc,format,nomBase){
+  if(_exportEnCours)return;_exportEnCours=true;
+  /* Ordinateur : la fenêtre d'impression est ouverte tout de suite (sinon le navigateur la bloque) */
+  const fen=format==='print'&&!estIOS()?window.open('','_blank'):null;
+  if(fen)fen.document.write('<p style="font:16px sans-serif;padding:24px">Préparation du document…</p>');
+  toast(format==='jpg'?'Préparation de l’image…':'Préparation du PDF…','⏳');
+  try{
+    if(format==='jpg'){const [cv]=await rendreDoc(doc,false);await donnerFichier(await canvasJpeg(cv,.86),nomFichier(nomBase,'jpg'),doc.titre);}
+    else{
+      const pdf=await pdfDepuisPages(await rendreDoc(doc,true));
+      if(fen){fen.location.href=URL.createObjectURL(pdf);}
+      else await donnerFichier(pdf,nomFichier(nomBase,'pdf'),doc.titre);
+      if(format==='print'&&estIOS())toast('Dans le menu Partager, choisissez « Imprimer ».','🖨️');
+    }
+  }catch(e){console.warn(e);if(fen)fen.close();toast('Export impossible : '+e.message,'⚠️');}
+  _exportEnCours=false;
+}
+function boutonsExport(appel){
+  return `<button class="btn btn-outline btn-sm" onclick="${appel}('pdf')">PDF</button><button class="btn btn-outline btn-sm" onclick="${appel}('jpg')">Image JPG</button><button class="btn btn-outline btn-sm" onclick="${appel}('print')">Imprimer</button>`;
 }
 
 /* ═══ Moteur de dessin (annotation photo / croquis / signature) ═══
@@ -3277,13 +3396,26 @@ function openChantierReport(id){
     <div class="rep-sec"><h4>Après travaux</h4>${gal(photosApresAll(c))}</div>
     <div class="rep-foot">Merci de votre confiance. — Sublime Toit · 07 60 21 22 58 · david@sublime-toit.fr</div>
   </div>
-  <p class="muted no-print" style="font-size:12px;margin-top:12px">« Enregistrer en PDF » ouvre la boîte d'impression de votre navigateur (choisissez « Enregistrer au format PDF »). « Envoyer au client » prépare un e-mail — joignez-y le PDF enregistré.</p>`;
+  <p class="muted no-print" style="font-size:12px;margin-top:12px">« PDF » et « Image JPG » créent le fichier du rapport (sur iPhone : menu Partager → Enregistrer dans Fichiers, Photos, Mail…). « Envoyer au client » prépare l’e-mail : joignez-y le PDF.</p>`;
   const foot=`<button class="btn btn-ghost no-print" onclick="openChantierDetail(${id})">Retour</button>
     <span style="flex:1"></span>
-    <button class="btn btn-outline no-print" onclick="window.print()">Imprimer / PDF</button>
+    ${boutonsExport('rapportExport.bind(null,'+id+')')}
     ${c.clientEmail?`<button class="btn btn-success no-print" onclick="sendChantierReport(${id})">Envoyer au client</button>`:'<button class="btn btn-success no-print" disabled title="Ajoutez l\'e-mail du client">Envoyer au client</button>'}`;
   openModal('Rapport de chantier','',body,foot,true);
 }
+function rapportDoc(c){
+  const blocs=[{t:'rows',rows:[['Client',c.client],['Adresse',[c.adresse,[c.cp,c.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ')||'—'],['Prestation',prest(c.prestation).label],
+    ['Intervenants',c.operateurIds.map(i=>{const o=teamMember(i);return o?o.name:'';}).filter(Boolean).join(', ')||'—']]}];
+  const trav=[c.travauxRealises,c.ficheReception&&c.ficheReception.conforme].filter(Boolean).join('\n');
+  blocs.push({t:'sec',titre:'Travaux réalisés'},{t:'p',texte:trav||'À compléter dans le rapport d’intervention.'});
+  if(c.reserves)blocs.push({t:'sec',titre:'Observations'},{t:'p',texte:c.reserves});
+  const av=photosAvantAll(c),ap=photosApresAll(c);
+  blocs.push({t:'sec',titre:'Avant travaux'},av.length?{t:'imgs',srcs:av}:{t:'p',texte:'Aucune photo.'});
+  blocs.push({t:'sec',titre:'Après travaux'},ap.length?{t:'imgs',srcs:ap}:{t:'p',texte:'Aucune photo.'});
+  return{titre:'Rapport de chantier',sousTitre:[c.client+(c.ville?' · '+c.ville:''),'Le '+fmtDate(c.ficheReception&&c.ficheReception.date||todayISO())],blocs,
+    pied:'Merci de votre confiance. — Sublime Toit · 07 60 21 22 58 · david@sublime-toit.fr'};
+}
+function rapportExport(id,format){const c=CHANTIERS.find(x=>x.id===id);if(c)exporterDoc(rapportDoc(c),format,'Rapport-chantier-'+c.client);}
 function sendChantierReport(id){
   const c=CHANTIERS.find(x=>x.id===id);if(!c)return;
   const sujet=encodeURIComponent('Rapport de chantier — Sublime Toit');
