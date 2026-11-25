@@ -278,6 +278,16 @@ textarea.r1-in{min-height:78px;resize:vertical;}
 .draw-btn.go{background:var(--vert);border-color:var(--vert);}
 .draw-canvas-wrap{flex:1;position:relative;overflow:hidden;touch-action:none;background:#fff;margin:10px;border-radius:10px;}
 #draw-cv{display:block;touch-action:none;cursor:crosshair;}
+.draw-grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.draw-tool{border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;border-radius:8px;padding:8px 11px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;}
+.draw-tool.on{background:#fff;color:#141c26;}
+label.draw-btn{display:inline-flex;align-items:center;gap:4px;}
+.draw-hint{background:#141c26;color:rgba(255,255,255,.7);font-size:12.5px;padding:0 14px 8px;}
+.draw-input{position:absolute;z-index:2;background:#fff;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.35);padding:10px;display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:600;color:var(--marine);}
+.draw-input[hidden]{display:none;}
+.draw-input input{flex:1;min-width:0;border:1.5px solid var(--trait-fort);border-radius:8px;padding:9px 10px;font:inherit;font-size:16px;font-weight:500;}
+.draw-input .draw-btn{color:var(--marine);border-color:var(--trait-fort);background:#fff;}
+.draw-input .draw-btn.go{color:#fff;background:var(--vert);border-color:var(--vert);}
 /* Survol des lignes cliquables + cartes */
 table tbody tr[onclick]{transition:background .12s ease;}
 table tbody tr[onclick]:hover{background:var(--bleu-pale);}
@@ -770,6 +780,7 @@ const SVG={
   'mes-chantiers':'<path d="M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6"/>',
   'mon-planning':'<rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 2.5v4M16 2.5v4M7.5 13h3M7.5 16.5h6"/>',
   report:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>',
+  photo:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
   camera:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
   equipe:'<path d="M17 21v-2a4 4 0 0 0-3-3.87M9 21v-2a4 4 0 0 1 3-3.87"/><circle cx="9" cy="7" r="3.2"/><circle cx="16" cy="8" r="2.6"/>',
   reglages:'<circle cx="12" cy="12" r="3"/><path d="M12 2.5v2.5M12 19v2.5M4.6 7l2.2 1.3M17.2 15.7l2.2 1.3M4.6 17l2.2-1.3M17.2 8.3l2.2-1.3"/>',
@@ -2175,11 +2186,15 @@ function r1CroquisBody(){
   const cr=_r1.data.croquis;
   return `<div class="r1-gal">
     ${cr.map((src,i)=>`<div class="r1-tile"><img src="${src}" onclick="showLightbox('${src}')"><div class="r1-tbar"><button onclick="r1EditCroquis(${i})">Modifier</button><button class="del" onclick="r1DelCroquis(${i})">Suppr.</button></div></div>`).join('')}
-    <button class="r1-addtile" onclick="r1NewCroquis()">${icon('edit',30)}<span style="font-size:13px;font-weight:600">Nouveau croquis</span></button>
-  </div>`;
+    <button class="r1-addtile" onclick="r1NewCroquis()">${icon('edit',30)}<span style="font-size:13px;font-weight:600">Croquis sur grille</span></button>
+    <label class="r1-addtile">${icon('camera',30)}<span style="font-size:13px;font-weight:600">Croquis sur photo<br><span style="font-weight:400">(appareil)</span></span><input type="file" accept="image/*" capture="environment" style="display:none" onchange="r1CroquisPhoto(event)"></label>
+    <label class="r1-addtile">${icon('photo',30)}<span style="font-size:13px;font-weight:600">Croquis sur photo<br><span style="font-weight:400">(galerie)</span></span><input type="file" accept="image/*" style="display:none" onchange="r1CroquisPhoto(event)"></label>
+  </div>
+  <p class="r1-sub" style="margin-top:10px">Outils : stylo, trait droit, cote en mètres et texte.</p>`;
 }
-function r1NewCroquis(){openDraw({bg:'grid',title:'Croquis à main levée',onsave:d=>{_r1.data.croquis.push(d);r1SaveSoon();r1RenderBody();r1Touch();}});}
-function r1EditCroquis(i){openDraw({bg:_r1.data.croquis[i],title:'Modifier le croquis',onsave:d=>{_r1.data.croquis[i]=d;r1SaveSoon();r1RenderBody();}});}
+function r1NewCroquis(bg){openDraw({bg:bg||'grid',photo:true,title:bg?'Croquis sur photo':'Croquis à main levée',onsave:d=>{_r1.data.croquis.push(d);r1SaveSoon();r1RenderBody();r1Touch();}});}
+function r1CroquisPhoto(ev){const file=ev.target.files&&ev.target.files[0];ev.target.value='';if(!file)return;compressPhoto(file,data=>r1NewCroquis(data));}
+function r1EditCroquis(i){openDraw({bg:_r1.data.croquis[i],photo:true,title:'Modifier le croquis',onsave:d=>{_r1.data.croquis[i]=d;r1SaveSoon();r1RenderBody();}});}
 function r1DelCroquis(i){confirmModal('Supprimer le croquis','Retirer ce croquis ?',()=>{_r1.data.croquis.splice(i,1);r1SaveSoon();r1RenderBody();r1Touch();},'Supprimer',true);}
 
 /* ── Récap / préconisations / signature ── */
@@ -2250,29 +2265,39 @@ function r1Print(){
   openModal('Fiche R1 — '+l.nom,'Aperçu imprimable',body,`<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-primary" onclick="window.print()">Imprimer</button>`,true);
 }
 
-/* ═══ Moteur de dessin (annotation photo / croquis / signature) ═══ */
+/* ═══ Moteur de dessin (annotation photo / croquis / signature) ═══
+   Outils : stylo, trait droit, cote en mètres, texte. Photo de fond (appareil ou galerie) pour les croquis. */
 let _draw=null;
 const DRAW_COLORS=['#0C508C','#D1483C','#4CA234','#1a2430','#E8A13A','#ffffff'];
+const DRAW_TOOLS=[['pen','Stylo'],['line','Trait droit'],['cote','Cote (m)'],['text','Texte']];
 function openDraw(opts){
   let o=document.getElementById('draw-screen');
   if(!o){o=document.createElement('div');o.id='draw-screen';o.className='draw-screen';document.body.appendChild(o);}
   o.classList.add('open');
+  const sign=!!opts.sign;
   o.innerHTML=`
     <div class="draw-bar">
       <span class="dt">${esc(opts.title||'Dessin')}</span>
-      ${DRAW_COLORS.map((c,i)=>`<button class="draw-sw ${i===0?'on':''}" style="background:${c}" data-col="${c}" onclick="drawColor('${c}',this)" title="Couleur"></button>`).join('')}
-      <button class="draw-sz" data-sz="2" onclick="drawSize(2,this)">·</button>
-      <button class="draw-sz on" data-sz="4" onclick="drawSize(4,this)">•</button>
-      <button class="draw-sz" data-sz="8" onclick="drawSize(8,this)">⬤</button>
-      <button class="draw-btn" onclick="drawUndo()">Annuler</button>
+      ${sign?'':`<div class="draw-grp">${DRAW_TOOLS.map(([k,t],i)=>`<button class="draw-tool ${i===0?'on':''}" data-tool="${k}" onclick="drawTool('${k}',this)">${t}</button>`).join('')}</div>`}
+      ${sign?'':`<div class="draw-grp">${DRAW_COLORS.map((c,i)=>`<button class="draw-sw ${i===0?'on':''}" style="background:${c}" data-col="${c}" onclick="drawColor('${c}',this)" title="Couleur"></button>`).join('')}</div>`}
+      ${sign?'':`<div class="draw-grp"><button class="draw-sz" data-sz="2" onclick="drawSize(2,this)" title="Fin">·</button>
+      <button class="draw-sz on" data-sz="4" onclick="drawSize(4,this)" title="Moyen">•</button>
+      <button class="draw-sz" data-sz="8" onclick="drawSize(8,this)" title="Épais">⬤</button></div>`}
+      ${opts.photo?`<label class="draw-btn" title="Mettre une photo en fond">📷 Photo de fond<input type="file" accept="image/*" style="display:none" onchange="drawBgPhoto(event)"></label>`:''}
+      <div class="draw-grp"><button class="draw-btn" onclick="drawUndo()">Annuler</button>
       <button class="draw-btn" onclick="drawClear()">Tout effacer</button>
       <button class="draw-btn" onclick="drawCancel()">Fermer</button>
-      <button class="draw-btn go" onclick="drawSave()">Valider</button>
+      <button class="draw-btn go" onclick="drawSave()">Valider</button></div>
     </div>
-    <div class="draw-canvas-wrap" id="draw-wrap"><canvas id="draw-cv"></canvas></div>`;
-  _draw={color:opts.sign?'#1a2430':'#0C508C',size:opts.sign?3:4,strokes:[],cur:null,bg:opts.bg,img:null,onsave:opts.onsave,fit:null};
+    <div class="draw-hint" id="draw-hint"></div>
+    <div class="draw-canvas-wrap" id="draw-wrap"><canvas id="draw-cv"></canvas><div class="draw-input" id="draw-input" hidden></div></div>`;
+  _draw={tool:'pen',color:sign?'#1a2430':'#0C508C',size:sign?3:4,strokes:[],cur:null,bg:opts.bg,img:null,onsave:opts.onsave,fit:null,sign};
+  drawHint();
   requestAnimationFrame(()=>drawInit());
 }
+const DRAW_HINTS={pen:'Dessinez librement au doigt.',line:'Glissez d’un point à un autre pour tracer un trait droit (il s’aligne tout seul à l’horizontale ou à la verticale).',
+  cote:'Glissez d’une extrémité à l’autre, puis saisissez la longueur en mètres.',text:'Touchez l’endroit où placer le texte.'};
+function drawHint(){const h=document.getElementById('draw-hint');if(h)h.textContent=_draw.sign?'Signez dans le cadre.':DRAW_HINTS[_draw.tool];}
 function drawInit(){
   const cv=document.getElementById('draw-cv'),wrap=document.getElementById('draw-wrap');
   if(!cv||!wrap)return;
@@ -2280,28 +2305,106 @@ function drawInit(){
   cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';
   const ctx=cv.getContext('2d');ctx.scale(dpr,dpr);
   _draw.cv=cv;_draw.ctx=ctx;_draw.W=W;_draw.H=H;
-  const paint=()=>drawRedraw();
-  if(_draw.bg&&_draw.bg!=='grid'&&_draw.bg!=='white'){const im=new Image();im.onload=()=>{_draw.img=im;drawRedraw();};im.onerror=paint;im.src=_draw.bg;}
-  else paint();
+  drawLoadBg();
   cv.onpointerdown=drawDown;cv.onpointermove=drawMove;cv.onpointerup=drawUp;cv.onpointercancel=drawUp;cv.onpointerleave=drawUp;
+}
+function drawLoadBg(){
+  _draw.img=null;
+  if(_draw.bg&&_draw.bg!=='grid'&&_draw.bg!=='white'){const im=new Image();im.onload=()=>{if(!_draw)return;_draw.img=im;drawRedraw();};im.onerror=()=>drawRedraw();im.src=_draw.bg;}
+  else drawRedraw();
+}
+/* Photo prise avec l'appareil ou choisie dans la galerie : devient le fond, les tracés sont conservés */
+function drawBgPhoto(ev){
+  const file=ev.target.files&&ev.target.files[0];ev.target.value='';if(!file||!_draw)return;
+  compressPhoto(file,data=>{if(!_draw)return;_draw.bg=data;drawLoadBg();toast('Photo mise en fond.','📷');});
 }
 function drawBg(){
   const {ctx,W,H,img,bg}=_draw;ctx.clearRect(0,0,W,H);ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
   if(bg==='grid'){ctx.strokeStyle='#E3E9F0';ctx.lineWidth=1;for(let x=0;x<=W;x+=24){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}for(let y=0;y<=H;y+=24){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}}
   else if(img){const r=Math.min(W/img.width,H/img.height);const w=img.width*r,h=img.height*r,ox=(W-w)/2,oy=(H-h)/2;_draw.fit={ox,oy,w,h};ctx.drawImage(img,ox,oy,w,h);}
 }
-function drawStroke(s){const {ctx}=_draw;ctx.strokeStyle=s.color;ctx.lineWidth=s.size;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();s.pts.forEach((p,i)=>{i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});if(s.pts.length===1){ctx.lineTo(s.pts[0].x+0.1,s.pts[0].y+0.1);}ctx.stroke();}
-function drawRedraw(){drawBg();_draw.strokes.forEach(drawStroke);if(_draw.cur)drawStroke(_draw.cur);}
+/* Texte lisible sur n'importe quel fond : cartouche blanc derrière */
+function drawLabel(ctx,txt,x,y,size,color,angle){
+  ctx.save();ctx.translate(x,y);if(angle)ctx.rotate(angle);
+  ctx.font=`700 ${size}px Inter,system-ui,sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+  const lines=String(txt).split('\n'),lh=size*1.25,w=Math.max(...lines.map(l=>ctx.measureText(l).width))+size*.7,h=lh*lines.length+size*.35;
+  ctx.fillStyle='rgba(255,255,255,.9)';ctx.beginPath();if(ctx.roundRect)ctx.roundRect(-w/2,-h/2,w,h,size*.3);else ctx.rect(-w/2,-h/2,w,h);ctx.fill();
+  ctx.fillStyle=color==='#ffffff'?'#1a2430':color;lines.forEach((l,i)=>ctx.fillText(l,0,(i-(lines.length-1)/2)*lh));
+  ctx.restore();
+}
+function drawStroke(s){
+  const {ctx}=_draw;ctx.strokeStyle=ctx.fillStyle=s.color;ctx.lineWidth=s.size;ctx.lineCap='round';ctx.lineJoin='round';
+  if(s.type==='text'){drawLabel(ctx,s.text,s.x,s.y,s.fs,s.color,0);return;}
+  if(s.type==='line'||s.type==='cote'){
+    const [a,b]=s.pts;if(!b)return;
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+    if(s.type==='cote'){
+      const ang=Math.atan2(b.y-a.y,b.x-a.x),nx=-Math.sin(ang),ny=Math.cos(ang),t=8+s.size*1.5,fl=7+s.size*1.8;
+      /* Traits d'attache perpendiculaires + flèches aux deux bouts */
+      for(const [p,dir] of [[a,1],[b,-1]]){
+        ctx.beginPath();ctx.moveTo(p.x-nx*t,p.y-ny*t);ctx.lineTo(p.x+nx*t,p.y+ny*t);ctx.stroke();
+        const ux=Math.cos(ang)*dir,uy=Math.sin(ang)*dir;
+        ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x+ux*fl+nx*fl*.45,p.y+uy*fl+ny*fl*.45);ctx.lineTo(p.x+ux*fl-nx*fl*.45,p.y+uy*fl-ny*fl*.45);ctx.closePath();ctx.fill();
+      }
+      if(s.text){let rot=ang;if(rot>Math.PI/2||rot<-Math.PI/2)rot+=Math.PI;drawLabel(ctx,s.text,(a.x+b.x)/2,(a.y+b.y)/2,13+s.size,s.color,rot);}
+    }
+    return;
+  }
+  ctx.beginPath();s.pts.forEach((p,i)=>{i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});if(s.pts.length===1){ctx.lineTo(s.pts[0].x+0.1,s.pts[0].y+0.1);}ctx.stroke();
+}
+function drawRedraw(){if(!_draw||!_draw.ctx)return;drawBg();_draw.strokes.forEach(drawStroke);if(_draw.cur)drawStroke(_draw.cur);}
 function drawPos(e){const r=_draw.cv.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top};}
-function drawDown(e){if(!_draw)return;e.preventDefault();try{_draw.cv.setPointerCapture(e.pointerId);}catch(_){}_draw.cur={color:_draw.color,size:_draw.size,pts:[drawPos(e)]};drawRedraw();}
-function drawMove(e){if(!_draw||!_draw.cur)return;e.preventDefault();_draw.cur.pts.push(drawPos(e));drawRedraw();}
-function drawUp(e){if(!_draw||!_draw.cur)return;if(_draw.cur.pts.length)_draw.strokes.push(_draw.cur);_draw.cur=null;drawRedraw();}
+/* Trait droit : aligné à l'horizontale / verticale quand on en est à moins de 6° */
+function drawSnap(a,b){const dx=b.x-a.x,dy=b.y-a.y,ang=Math.abs(Math.atan2(dy,dx)*180/Math.PI);
+  if(ang<6||ang>174)return{x:b.x,y:a.y};if(Math.abs(ang-90)<6)return{x:a.x,y:b.y};return b;}
+function drawDown(e){
+  if(!_draw)return;e.preventDefault();
+  if(_draw.input)drawInputOk();
+  const p=drawPos(e);
+  if(_draw.tool==='text'&&!_draw.sign){drawAskText(p,'Texte',{type:'text',x:p.x,y:p.y,color:_draw.color,size:_draw.size,fs:{2:14,4:18,8:26}[_draw.size]||18});return;}
+  try{_draw.cv.setPointerCapture(e.pointerId);}catch(_){}
+  const type=_draw.sign?'pen':_draw.tool;
+  _draw.cur={type,color:_draw.color,size:_draw.size,pts:type==='pen'?[p]:[p,p]};drawRedraw();
+}
+function drawMove(e){if(!_draw||!_draw.cur)return;e.preventDefault();const p=drawPos(e);
+  if(_draw.cur.type==='pen')_draw.cur.pts.push(p);else _draw.cur.pts[1]=drawSnap(_draw.cur.pts[0],p);drawRedraw();}
+function drawUp(e){
+  if(!_draw||!_draw.cur)return;const s=_draw.cur;_draw.cur=null;
+  if(s.type!=='pen'){const [a,b]=s.pts;if(Math.hypot(b.x-a.x,b.y-a.y)<8){drawRedraw();return;}}
+  _draw.strokes.push(s);drawRedraw();
+  if(s.type==='cote')drawAskText({x:(s.pts[0].x+s.pts[1].x)/2,y:(s.pts[0].y+s.pts[1].y)/2},'Longueur en mètres',s,true);
+}
+/* Petite zone de saisie posée sur le dessin (texte libre ou valeur d'une cote) */
+function drawAskText(p,label,target,cote){
+  const box=document.getElementById('draw-input');if(!box)return;
+  _draw.input={target,cote};
+  box.hidden=false;
+  box.innerHTML=`<span>${esc(label)}</span><div style="display:flex;gap:6px;align-items:center">
+    <input id="draw-txt" ${cote?'inputmode="decimal" placeholder="ex. 4,50"':'placeholder="Votre texte"'} autocomplete="off">${cote?'<b>m</b>':''}
+    <button class="draw-btn go" onclick="drawInputOk()">OK</button><button class="draw-btn" onclick="drawInputCancel()">✕</button></div>`;
+  const W=_draw.W,H=_draw.H,bw=Math.min(300,W-16);
+  box.style.width=bw+'px';box.style.left=Math.max(8,Math.min(W-bw-8,p.x-bw/2))+'px';box.style.top=Math.max(8,Math.min(H-96,p.y+18))+'px';
+  const inp=document.getElementById('draw-txt');
+  inp.onkeydown=ev=>{if(ev.key==='Enter'){ev.preventDefault();drawInputOk();}else if(ev.key==='Escape')drawInputCancel();};
+  setTimeout(()=>inp.focus(),30);
+}
+function drawInputOk(){
+  if(!_draw||!_draw.input)return;const {target,cote}=_draw.input,inp=document.getElementById('draw-txt');
+  let v=(inp&&inp.value||'').trim();
+  if(cote){
+    if(v){const n=parseFloat(v.replace(',','.').replace(/[^\d.]/g,''));target.text=isFinite(n)?n.toLocaleString('fr-FR',{minimumFractionDigits:n%1?2:0,maximumFractionDigits:2})+' m':v;}
+  }else if(v){target.text=v;_draw.strokes.push(target);}
+  drawCloseInput();drawRedraw();
+}
+function drawInputCancel(){drawCloseInput();drawRedraw();}   /* cote sans valeur : la flèche reste, on peut annuler */
+function drawCloseInput(){const box=document.getElementById('draw-input');if(box){box.hidden=true;box.innerHTML='';}if(_draw)_draw.input=null;}
+function drawTool(k,btn){if(_draw.input)drawInputOk();_draw.tool=k;[...btn.parentElement.querySelectorAll('.draw-tool')].forEach(b=>b.classList.toggle('on',b===btn));drawHint();}
 function drawColor(c,btn){_draw.color=c;[...btn.parentElement.querySelectorAll('.draw-sw')].forEach(b=>b.classList.toggle('on',b===btn));}
 function drawSize(s,btn){_draw.size=s;[...btn.parentElement.querySelectorAll('.draw-sz')].forEach(b=>b.classList.toggle('on',b===btn));}
-function drawUndo(){_draw.strokes.pop();drawRedraw();}
-function drawClear(){_draw.strokes=[];drawRedraw();}
+function drawUndo(){if(_draw.input)drawCloseInput();_draw.strokes.pop();drawRedraw();}
+function drawClear(){drawCloseInput();_draw.strokes=[];drawRedraw();}
 function drawCancel(){const o=document.getElementById('draw-screen');if(o)o.classList.remove('open');_draw=null;}
-function drawSave(){const cv=_draw.cv;const out=cv.toDataURL('image/jpeg',0.82);const cb=_draw.onsave;drawCancel();if(cb)cb(out);}
+function drawSave(){if(_draw.input)drawInputOk();const cv=_draw.cv;const out=cv.toDataURL('image/jpeg',0.82);const cb=_draw.onsave;drawCancel();if(cb)cb(out);}
 
 /* ── Passage signé : liaison Interfast obligatoire ── */
 function openSignForm(id){
