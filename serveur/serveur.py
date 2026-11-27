@@ -17,7 +17,7 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = '1.3.0'
+VERSION = '1.4.0'
 DATA = os.environ.get('SUBLIME_DATA', '/var/lib/sublime-synchro')
 COMPTES = os.path.join(DATA, 'comptes.json')
 HOTE = os.environ.get('SUBLIME_HOTE', '127.0.0.1')
@@ -26,7 +26,7 @@ ID_OK = re.compile(r'^[A-Za-z0-9_-]{1,80}$')
 MAX_ETAT = 60 * 1024 * 1024
 MAX_PHOTO = 12 * 1024 * 1024
 ESPACES = {'pf': 'sublime-toit', 'carte': 'carte-prospection'}
-TYPES = {b'\xff\xd8': ('jpg', 'image/jpeg'), b'\x89P': ('png', 'image/png'), b'RI': ('webp', 'image/webp')}
+TYPES = {b'\xff\xd8': ('jpg', 'image/jpeg'), b'\x89P': ('png', 'image/png'), b'RI': ('webp', 'image/webp'), b'%P': ('pdf', 'application/pdf')}
 for e in ESPACES:
     os.makedirs(os.path.join(DATA, e, 'etats'), exist_ok=True)
     os.makedirs(os.path.join(DATA, e, 'photos'), exist_ok=True)
@@ -468,7 +468,7 @@ class Gestion(BaseHTTPRequestHandler):
             if corps is None:
                 return
             t = TYPES.get(corps[:2])
-            if not t or (t[0] == 'webp' and corps[8:12] != b'WEBP'):
+            if not t or (t[0] == 'webp' and corps[8:12] != b'WEBP') or (t[0] == 'pdf' and (esp != 'pf' or corps[:5] != b'%PDF-')):
                 return self.repondre(400, {'erreur': 'Image non reconnue'})
             ecrire(os.path.join(base, 'photos', parts[2] + '.' + t[0]), corps)
             return self.repondre(200, {'ok': True})

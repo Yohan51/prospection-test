@@ -1025,7 +1025,7 @@ function refPhoto(data){
   }
   return 'idb:'+id;
 }
-const remplPhotos=(k,v)=>typeof v==='string'&&v.length>300&&v.startsWith('data:image/')?refPhoto(v):v;
+const remplPhotos=(k,v)=>typeof v==='string'&&v.length>300&&(v.startsWith('data:image/')||v.startsWith('data:application/pdf'))?refPhoto(v):v;
 /* Au chargement : remet les images à la place des références, et range celles qui ne le sont pas encore */
 async function chargerPhotos(){
   let db;try{db=await photoDb();}catch(e){console.warn('photos indisponibles',e);return;}
@@ -2312,6 +2312,8 @@ function openLeadDetail(id){
       ${l.porteId?`<button class="btn btn-outline btn-sm" onclick="stpVoirPorte('${esc(l.porteId)}')">Voir sur la carte</button>`:''}
     </div>
     ${leadRdvList(l.id)}
+    <div class="sec-lbl" style="margin-top:16px">Devis Interfast</div>
+    ${htmlDevisLead(l)}
     <div class="sec-lbl" style="margin-top:16px">Photos du dossier <span class="muted" style="font-weight:400">(visite, toiture, devis…)</span></div>
     ${photoStrip('lead',l.id,'photos')}`;
   const canDelete=session.role==='direction'||leadCommercials(l).includes(session.id);
@@ -2323,6 +2325,105 @@ function openLeadDetail(id){
   openModal(l.nom, esc(l.ville)+' · '+fmtMoney(l.montant), body, foot, true);
 }
 
+/* ═══ DEVIS INTERFAST (PDF joint à la fiche) ═══
+   Le PDF est gardé sur la fiche (et partagé avec l'équipe par la synchro). Son n°, sa date et ses montants
+   sont lus automatiquement (pdf.js, livré avec l'appli) et proposés à la vérification. */
+function htmlDevisLead(l){
+  const liste=(l.devis||[]).slice().sort((a,b)=>String(b.date||b.ajoute).localeCompare(String(a.date||a.ajoute)));
+  return `${liste.map(d=>`<div class="card" style="margin:0 0 8px"><div class="card-bd flex items-center" style="justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div><div class="t-main">📄 Devis ${esc(d.num||'sans n°')}${d.date?' · '+fmtDate(d.date):''}</div>
+        <div class="t-sub" style="margin-top:3px">${d.ht?fmtMoney(d.ht)+' HT':'Montant non lu'}${d.ttc?' · '+fmtMoney(d.ttc)+' TTC':''} · ${esc(d.nom||'devis.pdf')}</div></div>
+      <div class="flex gap" style="flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="ouvrirDevisPdf(${l.id},'${d.id}')">Ouvrir</button>
+        <button class="btn btn-outline btn-sm" onclick="partagerDevisPdf(${l.id},'${d.id}')">Partager</button>
+        <button class="btn btn-ghost btn-sm" onclick="retirerDevis(${l.id},'${d.id}')">Retirer</button>
+      </div></div></div>`).join('')}
+    <label class="btn btn-outline btn-sm" style="cursor:pointer">+ Joindre un devis (PDF)<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="joindreDevis(event,${l.id})"></label>
+    <p class="muted" style="font-size:11.5px;margin-top:6px">Depuis l’app Interfast : ouvrez le devis → Partager → Enregistrer dans Fichiers, puis choisissez-le ici.</p>`;
+}
+const lireFichier=f=>new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=ko;r.readAsDataURL(f);});
+let _pdfjs=null;
+async function textePdf(dataUrl){
+  if(!_pdfjs){_pdfjs=await import('./lib/pdfjs/pdf.min.js');_pdfjs.GlobalWorkerOptions.workerSrc=new URL('./lib/pdfjs/pdf.worker.min.js',location.href).href;}
+  const doc=await _pdfjs.getDocument({data:dataUrlVersBlob(dataUrl).arrayBuffer?new Uint8Array(await dataUrlVersBlob(dataUrl).arrayBuffer()):null}).promise;
+  let t='';
+  for(let p=1;p<=Math.min(doc.numPages,6);p++){
+    const c=await (await doc.getPage(p)).getTextContent();
+    let y=null;for(const it of c.items){const yy=it.transform?Math.round(it.transform[5]):y;t+=(y!==null&&yy!==y?'\n':' ')+it.str;y=yy;}
+    t+='\n';
+  }
+  return t;
+}
+const nombreFr=x=>{if(!x)return 0;const n=parseFloat(String(x).replace(/[\s\u00a0\u202f.]/g,'').replace(',','.'));return isFinite(n)?n:0;};
+function analyserDevis(t){
+  t=String(t||'').replace(/[\u00a0\u202f]/g,' ');
+  const MONT='(\\d{1,3}(?:[ .]\\d{3})*,\\d{2}|\\d+,\\d{2}|\\d{1,3}(?:[ .]\\d{3})+|\\d+)\\s*€?';
+  const dernier=(re)=>{let m,v=null;const r=new RegExp(re,'gi');while((m=r.exec(t)))v=m[1];return v;};
+  const ht=dernier('(?:total|montant)\\s*(?:net\\s*)?h\\.?\\s*t\\.?(?!\\s*v)[^\\d\\n]{0,25}'+MONT);
+  const ttc=dernier('(?:total\\s*t\\.?\\s*t\\.?\\s*c\\.?|montant\\s*t\\.?\\s*t\\.?\\s*c\\.?|net\\s*à\\s*payer)[^\\d\\n]{0,25}'+MONT);
+  let num=(t.match(/devis\s*(?:n\s*[°º o]\.?|num[ée]ro|#)?\s*[:\-]?\s*([A-Z]{0,6}[-\/]?\d[\w\-\/.]{1,24})/i)||[])[1]||'';
+  num=num.replace(/[.\-\/]+$/,'');
+  const dm=t.match(/(?:date(?:\s*du\s*devis|\s*d['’]émission)?|émis\s*le|fait\s*le)\s*:?\s*(?:le\s*)?(\d{1,2})[\/.](\d{1,2})[\/.](\d{2,4})/i)||t.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  const date=dm?`${dm[3].length===2?'20'+dm[3]:dm[3]}-${dm[2].padStart(2,'0')}-${dm[1].padStart(2,'0')}`:'';
+  return {num,date,ht:nombreFr(ht),ttc:nombreFr(ttc)};
+}
+let _devisEnCours=null;
+async function joindreDevis(ev,leadId){
+  const f=ev.target.files&&ev.target.files[0];ev.target.value='';if(!f)return;
+  if(f.size>8*1024*1024)return toast('PDF trop lourd (8 Mo maximum).','⚠️');
+  toast('Lecture du devis…','⏳');
+  let data,lu={num:'',date:'',ht:0,ttc:0};
+  try{data=await lireFichier(f);}catch(e){return toast('Fichier illisible.','⚠️');}
+  if(!/^data:application\/pdf/.test(data))data=data.replace(/^data:[^;]*/,'data:application/pdf');
+  try{lu=analyserDevis(await textePdf(data));}catch(e){console.warn('pdf',e);toast('Montants non lus automatiquement : saisissez-les.','ℹ️');}
+  _devisEnCours={leadId,data,nom:f.name};
+  const l=LEADS.find(x=>x.id===leadId);if(!l)return;
+  const ordre=STAGES.map(x=>x.key),avant=ordre.indexOf(l.stage)<ordre.indexOf('devis')&&!stage(l.stage).lost;
+  openModal('Devis Interfast','Vérifiez les informations lues dans le PDF',`
+    <div class="grid-2" style="gap:12px">
+      <div class="field"><label>N° de devis</label><input id="dv-num" value="${esc(lu.num)}"></div>
+      <div class="field"><label>Date du devis</label><input type="date" id="dv-date" value="${esc(lu.date||todayISO())}"></div>
+      <div class="field"><label>Montant HT (€)</label><input type="number" step="0.01" id="dv-ht" value="${lu.ht||''}"></div>
+      <div class="field"><label>Montant TTC (€)</label><input type="number" step="0.01" id="dv-ttc" value="${lu.ttc||''}"></div>
+    </div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:6px"><input type="checkbox" id="dv-mt" checked> Reporter le montant HT sur le prospect</label>
+    ${avant?`<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:8px"><input type="checkbox" id="dv-et" checked> Passer le prospect à l’étape « ${esc(stage('devis').label)} »</label>`:''}
+    <p class="muted" style="font-size:12px;margin-top:10px">Fichier : ${esc(f.name)} (${Math.round(f.size/1024)} Ko)</p>`,
+    `<button class="btn btn-ghost" onclick="openLeadDetail(${leadId})">Annuler</button><button class="btn btn-primary" onclick="enregistrerDevis()">Enregistrer</button>`);
+}
+function enregistrerDevis(){
+  const x=_devisEnCours;if(!x)return;const l=LEADS.find(y=>y.id===x.leadId);if(!l)return;
+  const d={id:'dv'+Date.now().toString(36),num:val('dv-num').trim(),date:val('dv-date'),ht:parseFloat(val('dv-ht'))||0,ttc:parseFloat(val('dv-ttc'))||0,
+    nom:x.nom,fichier:x.data,ajoute:new Date().toISOString(),par:session.id};
+  (l.devis=l.devis||[]).push(d);
+  if(document.getElementById('dv-mt')&&document.getElementById('dv-mt').checked&&d.ht)l.montant=d.ht;
+  if(d.date)l.devisDate=d.date;
+  const et=document.getElementById('dv-et');
+  if(et&&et.checked){l.stage='devis';l._etapeVue='devis';l.etapeDepuis=d.date||todayISO();}
+  logAct('Devis Interfast joint'+(d.num?' ('+d.num+')':''),l.nom);
+  _devisEnCours=null;saveStore();toast('Devis joint à la fiche.','📄');openLeadDetail(l.id);
+}
+function devisDe(leadId,devisId){const l=LEADS.find(x=>x.id===leadId);const ds=(l&&l.devis)||[];return devisId?ds.find(d=>d.id===devisId):ds.slice().sort((a,b)=>String(b.date||b.ajoute).localeCompare(String(a.date||a.ajoute)))[0];}
+function ouvrirDevisPdf(leadId,devisId){
+  const d=devisDe(leadId,devisId);if(!d)return;
+  if(!/^data:application\/pdf/.test(d.fichier||''))return toast('PDF pas encore reçu sur cet appareil : synchronisez puis réessayez.','ℹ️');
+  const url=URL.createObjectURL(dataUrlVersBlob(d.fichier));
+  const w=window.open(url,'_blank');if(!w)location.href=url;
+  setTimeout(()=>URL.revokeObjectURL(url),120000);
+}
+function partagerDevisPdf(leadId,devisId){
+  const l=LEADS.find(x=>x.id===leadId),d=devisDe(leadId,devisId);if(!d)return;
+  if(!/^data:application\/pdf/.test(d.fichier||''))return toast('PDF pas encore reçu sur cet appareil.','ℹ️');
+  const f=new File([dataUrlVersBlob(d.fichier)],nomFichier('Devis '+(d.num||'')+' '+l.nom,'pdf'),{type:'application/pdf'});
+  if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:'Devis '+(d.num||'')}).catch(()=>{});return;}
+  donnerFichier(f,f.name,'Devis');
+}
+function retirerDevis(leadId,devisId){
+  confirmModal('Retirer le devis','Retirer ce PDF de la fiche ? (Le devis reste dans Interfast.)',()=>{
+    const l=LEADS.find(x=>x.id===leadId);if(!l)return;l.devis=(l.devis||[]).filter(d=>d.id!==devisId);
+    saveStore();openLeadDetail(leadId);
+  },'Retirer',true);
+}
 function deleteLead(id){
   const l=LEADS.find(x=>x.id===id);if(!l)return;
   confirmModal('Supprimer le prospect','Supprimer définitivement le prospect « '+l.nom+' » ?',()=>{
@@ -3099,9 +3200,9 @@ function drawSave(){
 function openSignForm(id){
   const l=LEADS.find(x=>x.id===id);if(!l)return;
   const body=`<p style="font-size:13px;color:var(--ardoise);margin-bottom:16px">Pour passer ce dossier en <b>signé</b>, la référence du devis Interfast est obligatoire.</p>
-    <div class="field"><label>Référence devis Interfast *</label><input id="sg-ref" value="${esc(l.interfastRef||'')}" placeholder="DEV-2026-..."></div>
+    <div class="field"><label>Référence devis Interfast *</label><input id="sg-ref" value="${esc(l.interfastRef||(devisDe(l.id)||{}).num||'')}" placeholder="DEV-2026-..."></div>
     <div class="form-row">
-      <div class="field"><label>Montant HT *</label><input id="sg-ht" type="number" value="${l.montantHT||l.montant||''}" placeholder="0"></div>
+      <div class="field"><label>Montant HT *</label><input id="sg-ht" type="number" value="${l.montantHT||l.montant||(devisDe(l.id)||{}).ht||''}" placeholder="0"></div>
       <div class="field"><label>Date du devis</label><input id="sg-date" type="date" value="${l.devisDate||todayISO()}"></div>
     </div>
     <div class="field"><label>Commentaire pour l'équipe technique <span class="muted" style="font-weight:400">(transmis à la pré-fiche chantier)</span></label><textarea id="sg-comment" placeholder="Accès, contraintes, points de vigilance, matériel à prévoir…">${esc(l.signComment||'')}</textarea></div>
@@ -4931,6 +5032,7 @@ function htmlJourneePf(){
           ${boutonsSmsRdv(r,ld)}
           <button class="btn btn-outline btn-sm" onclick="openLeadDetail(${ld.id})">Fiche</button>
           ${r.type==='R1'?`<button class="btn btn-outline btn-sm" onclick="openR1(${ld.id})">Fiche R1</button>`:''}
+          ${(ld.devis||[]).length?`<button class="btn btn-outline btn-sm" onclick="ouvrirDevisPdf(${ld.id})">Devis PDF</button>`:''}
         </div></div></div>`;
   }).join('');
   return card('Ma journée',dec?'Demain':'Aujourd’hui',`${onglets}<div style="margin-top:12px">${items||emptyMini(`Aucun rendez-vous ${dec?'demain':'aujourd’hui'}.`)}</div>${dec?'':htmlRelances()}`,
