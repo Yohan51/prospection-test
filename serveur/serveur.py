@@ -17,7 +17,7 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = '1.1.0'
+VERSION = '1.2.0'
 DATA = os.environ.get('SUBLIME_DATA', '/var/lib/sublime-synchro')
 COMPTES = os.path.join(DATA, 'comptes.json')
 HOTE = os.environ.get('SUBLIME_HOTE', '127.0.0.1')
@@ -201,6 +201,86 @@ def noter_envoye(k, par):
         ecrire(REGISTRE, json.dumps(reg, ensure_ascii=False).encode('utf-8'))
 
 
+# ── Agenda par abonnement ────────────────────────────────
+# Chaque personne a une adresse d'agenda secrète (…/pf/agenda/<id>-<jeton>.ics) : son iPhone, son Mac ou
+# Google Agenda s'y abonnent et reçoivent tout seuls ses rendez-vous, mises à jour et annulations comprises.
+SECRET_F = os.path.join(DATA, 'secret.key')
+
+
+def secret():
+    try:
+        with open(SECRET_F, 'rb') as f:
+            k = f.read()
+        if len(k) >= 32:
+            return k
+    except OSError:
+        pass
+    k = os.urandom(32)
+    ecrire(SECRET_F, k)
+    os.chmod(SECRET_F, 0o600)
+    return k
+
+
+def jeton(ident):
+    return hmac.new(secret(), ('agenda|' + ident).encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def ics_echap(t):
+    return str(t or '').replace('\\', '\\\\').replace(';', '\\;').replace(',', '\\,').replace('\r\n', '\\n').replace('\n', '\\n')
+
+
+def ics_plier(ligne):
+    b, out, cour = ligne.encode('utf-8'), [], b''
+    i = 0
+    while i < len(b):
+        lim = 75 if not out else 74
+        j = min(i + lim - len(cour), len(b))
+        while j < len(b) and (b[j] & 0xC0) == 0x80:   # ne pas couper un caractère accentué
+            j -= 1
+        out.append((b' ' if out else b'') + b[i:j])
+        i = j
+    return b'\r\n'.join(out).decode('utf-8') if out else ''
+
+
+def ics_date(iso):
+    d = date_iso(iso)
+    return d.astimezone(timezone.utc).strftime('%Y%m%dT%H%M%SZ') if d else None
+
+
+def agenda_ics(c, equipe):
+    dossier = os.path.join(DATA, 'pf', 'etats')
+    fichiers = [os.path.join(dossier, f) for f in os.listdir(dossier) if f.endswith('.json')]
+    evs = []
+    if fichiers:
+        try:
+            with open(max(fichiers, key=os.path.getmtime), encoding='utf-8') as f:
+                evs = json.load(f).get('agendaRdv') or []
+        except (OSError, ValueError):
+            evs = []
+    noms = {x['id']: x.get('nom', x['id']) for x in comptes()}
+    maint = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    lignes = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Sublime Toit//Plateforme//FR', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+              'X-WR-CALNAME:' + ics_echap('Sublime Toit – ' + ('équipe' if equipe else 'mes RDV')), 'X-WR-TIMEZONE:Europe/Paris',
+              'REFRESH-INTERVAL;VALUE=DURATION:PT15M', 'X-PUBLISHED-TTL:PT15M']
+    for e in evs:
+        if not isinstance(e, dict) or (not equipe and e.get('pour') != c['id']):
+            continue
+        deb, fin = ics_date(e.get('debut')), ics_date(e.get('fin'))
+        if not deb or not fin or not ID_OK.match(str(e.get('uid', ''))):
+            continue
+        titre = e.get('titre', 'Rendez-vous')
+        if equipe and e.get('pour') != c['id']:
+            titre += ' (' + noms.get(e.get('pour'), e.get('pour') or '?').split(' ')[0] + ')'
+        lignes += ['BEGIN:VEVENT', 'UID:%s@sublime-toit' % e['uid'], 'DTSTAMP:' + maint, 'DTSTART:' + deb, 'DTEND:' + fin,
+                   'SUMMARY:' + ics_echap(titre), 'LOCATION:' + ics_echap(e.get('lieu')), 'DESCRIPTION:' + ics_echap(e.get('notes')),
+                   'STATUS:CONFIRMED', 'TRANSP:OPAQUE']
+        if not e.get('fait'):
+            lignes += ['BEGIN:VALARM', 'ACTION:DISPLAY', 'TRIGGER:-PT1H', 'DESCRIPTION:' + ics_echap(titre), 'END:VALARM']
+        lignes.append('END:VEVENT')
+    lignes.append('END:VCALENDAR')
+    return ('\r\n'.join(ics_plier(l) for l in lignes) + '\r\n').encode('utf-8')
+
+
 class Gestion(BaseHTTPRequestHandler):
     server_version = 'SublimeSynchro/' + VERSION
     protocol_version = 'HTTP/1.1'
@@ -268,6 +348,19 @@ class Gestion(BaseHTTPRequestHandler):
         parts, params = self.decouper()
         if not parts:
             return self.repondre(200, {'service': 'sublime-synchro', 'version': VERSION, 'ok': True})
+        if len(parts) == 3 and parts[:2] == ['pf', 'agenda'] and parts[2].endswith('.ics'):
+            # Abonnement d'agenda : pas d'en-tête possible, le jeton secret de l'adresse sert de clé
+            ip = self.ip()
+            if bloque(ip):
+                return self.repondre(429, {'erreur': 'Trop d’essais'})
+            ident, _, j = parts[2][:-4].rpartition('-')
+            c = next((x for x in comptes() if x['id'] == ident), None)
+            if not c or not hmac.compare_digest(j, jeton(ident)):
+                noter_echec(ip)
+                return self.repondre(404, {'erreur': 'Agenda inconnu'})
+            self.qui = ident + ' (agenda)'
+            equipe = params.get('equipe') == '1' and c.get('role') == 'direction'
+            return self.repondre(200, agenda_ics(c, equipe), 'text/calendar; charset=utf-8')
         c = self.compte()
         if not c:
             return
@@ -276,9 +369,11 @@ class Gestion(BaseHTTPRequestHandler):
                                        'email': c.get('email', ''), 'tel': c.get('tel', '')})
         if parts == ['equipe']:
             return self.repondre(200, {'equipe': [{k: x.get(k, '') for k in ('id', 'nom', 'role', 'email', 'tel')} for x in comptes()]})
+        if parts == ['pf', 'agenda', 'lien']:
+            return self.repondre(200, {'chemin': '/pf/agenda/%s-%s.ics' % (c['id'], jeton(c['id'])), 'direction': c.get('role') == 'direction'})
         if parts == ['pf', 'sms', 'suivant']:
             f = file_sms(c['id'])
-            return self.repondre(200, f[0] if f else {'k': '', 'tel': '', 'texte': '', 'reste': 0})
+            return self.repondre(200, f[0] if f else {'rien': True})
         if parts == ['pf', 'sms', 'file']:
             return self.repondre(200, {'sms': file_sms(c['id']), 'heuresOk': heures_ok(datetime.now(timezone.utc))})
         if parts == ['pf', 'sms', 'envoyes']:

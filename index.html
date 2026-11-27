@@ -1440,7 +1440,7 @@ function rafraichirVue(){
 }
 function etatPourEnvoi(){
   return JSON.stringify({app:'sublime-toit',v:3,appareil:SYNC.appareil,par:session.id,
-    LEADS,RDVS,CHANTIERS,CHARGES,ENCAISSEMENTS,PILOTAGE,STAGES,JOURNAL:JOURNAL.slice(0,300),SUPPR,MAJ_GLOBAL,smsAFaire:smsPourRelais()},remplPhotos);
+    LEADS,RDVS,CHANTIERS,CHARGES,ENCAISSEMENTS,PILOTAGE,STAGES,JOURNAL:JOURNAL.slice(0,300),SUPPR,MAJ_GLOBAL,smsAFaire:smsPourRelais(),agendaRdv:agendaPourAbonnement()},remplPhotos);
 }
 function synchroniser(manuel){
   if(!synchroActive()||!session)return Promise.resolve(false);
@@ -3278,7 +3278,7 @@ function openRdvPlanifie(id){
   openModal(`${r.type} planifié`,`${l.nom} · ${debutRdv(r).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})} à ${hTxt(debutRdv(r))}`,
     `${tel?`<div class="sec-lbl">SMS de confirmation</div><p style="font-size:13px;color:var(--ardoise);white-space:pre-wrap;background:var(--bleu-pale);border-radius:var(--r-s);padding:10px 12px">${esc(texteSmsRdv(r,l,false))}</p>`
       :'<p class="muted" style="font-size:13px">Pas de numéro de portable sur la fiche : pas de SMS de confirmation possible.</p>'}`,
-    `<button class="btn btn-ghost" onclick="openLeadDetail(${l.id})">Plus tard</button><button class="btn btn-outline" onclick="calendrierRdv(${r.id})">Calendrier</button>${tel?`<button class="btn btn-ambre" onclick="envoyerSmsRdv(${r.id},false);openLeadDetail(${l.id})">Envoyer le SMS</button>`:''}`);
+    `<button class="btn btn-ghost" onclick="openLeadDetail(${l.id})">Plus tard</button>${agendaAbonne()?'':`<button class="btn btn-outline" onclick="calendrierRdv(${r.id})">Calendrier</button>`}${tel?`<button class="btn btn-ambre" onclick="envoyerSmsRdv(${r.id},false);openLeadDetail(${l.id})">Envoyer le SMS</button>`:''}`);
 }
 function submitRdv(leadId,type){
   const l=LEADS.find(x=>x.id===leadId);if(!l)return;
@@ -4575,6 +4575,11 @@ function openMesDonneesServeur(){
       <b>${esc(texteEtatSynchro())}</b><br>
       Vos données sont partagées avec l’équipe et sauvegardées chaque nuit sur le serveur.</p>
     <button class="btn btn-primary" onclick="synchroniser(true).then(()=>{if(document.getElementById('md-etat'))openMesDonneesServeur();})">🔄 Synchroniser maintenant</button>
+    <div class="sec-lbl" style="margin-top:20px">Mon agenda</div>
+    <p class="muted" style="font-size:12.5px;margin-bottom:10px">${agendaAbonne()
+      ?'✓ Vos rendez-vous arrivent tout seuls dans votre app Calendrier (agenda « Sublime Toit », mis à jour toutes les 15 min environ). Les boutons « Calendrier » sont masqués.'
+      :'Abonnez votre app Calendrier à vos rendez-vous : chaque RDV calé, déplacé ou annulé (par vous ou par un collègue) s’y met à jour tout seul, sans fichier à ouvrir.'}</p>
+    <button class="btn ${agendaAbonne()?'btn-outline':'btn-primary'}" onclick="openAbonnementAgenda()">📅 ${agendaAbonne()?'Revoir le lien d’abonnement':'Abonner mon agenda'}</button>
     <div class="sec-lbl" style="margin-top:20px">Copie sur cet appareil</div>
     <p class="muted" style="font-size:12.5px;margin-bottom:10px">En plus, vous pouvez garder une copie personnelle (fichier) : sur iPhone, « Enregistrer dans Fichiers ».</p>
     <button class="btn btn-outline" onclick="exportData()">💾 Télécharger une copie</button>
@@ -4582,6 +4587,36 @@ function openMesDonneesServeur(){
     <p class="muted" style="font-size:12.5px;margin-bottom:10px">Identifiant de synchro : ${esc(SYNC.appareil)}</p>
     <button class="btn btn-outline" onclick="closeModal();oublierServeurConnecte()">Délier cet appareil du serveur</button>`,
     `<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>`);
+}
+async function openAbonnementAgenda(){
+  let j;try{j=await (await appelServeur('/pf/agenda/lien')).json();}catch(e){return toast('Serveur injoignable : '+e.message,'⚠️');}
+  const url=SYNC.url+j.chemin,webcal=url.replace(/^https?:/,'webcal:'),ios=estIOS(),mac=/Macintosh/.test(navigator.userAgent)&&!ios;
+  const lien=(u,t)=>`<div style="display:flex;gap:8px;align-items:center;margin:6px 0 4px"><input readonly value="${esc(u)}" style="flex:1;font-size:12px" onclick="this.select()"><button class="btn btn-outline btn-sm" onclick="copierTexte('${esc(u)}')">Copier</button></div>${t?`<p class="muted" style="font-size:11.5px;margin-bottom:8px">${t}</p>`:''}`;
+  openModal('Abonner mon agenda','Vos RDV dans l’app Calendrier, mis à jour tout seuls',`
+    <p style="font-size:13px;color:var(--ardoise);line-height:1.55;margin-bottom:12px">Cette adresse est <b>personnelle</b> : elle donne accès à vos rendez-vous. Ne la partagez pas. Elle ne fonctionne que sur un appareil relié à Tailscale.</p>
+    ${lien(url,'Adresse de votre agenda')}
+    ${j.direction?lien(url+'?equipe=1','Variante « toute l’équipe » (direction) : les RDV de chacun, avec le prénom du commercial.'):''}
+    ${ios?`<div class="sec-lbl" style="margin-top:14px">Sur cet iPhone / iPad</div>
+      <ol style="font-size:13px;line-height:1.6;padding-left:18px;color:var(--ardoise)">
+        <li>Touchez <b>Copier</b> ci-dessus.</li>
+        <li><b>Réglages</b> → <b>Apps</b> → <b>Calendrier</b> → <b>Comptes de calendrier</b> → <b>Ajouter un compte</b> → <b>Autre</b> → <b>Ajouter un calendrier avec abonnement</b>.</li>
+        <li>Collez l’adresse dans « Serveur », touchez <b>Suivant</b>, puis <b>Enregistrer</b>.</li></ol>`:''}
+    ${mac?`<div class="sec-lbl" style="margin-top:14px">Sur ce Mac</div>
+      <ol style="font-size:13px;line-height:1.6;padding-left:18px;color:var(--ardoise)">
+        <li>Touchez <b>Copier</b> ci-dessus.</li>
+        <li>App <b>Calendrier</b> → menu <b>Fichier</b> → <b>Nouvel abonnement à un calendrier…</b> → collez l’adresse → <b>S’abonner</b>.</li>
+        <li>Emplacement : <b>Sur mon Mac</b> (pas « iCloud » : les serveurs d’Apple ne peuvent pas joindre le Pi) ; Actualisation : <b>toutes les 5 minutes</b> ; décochez « Supprimer les alarmes » si vous voulez le rappel 1 h avant.</li></ol>`:''}
+    ${!ios&&!mac?`<div class="sec-lbl" style="margin-top:14px">Sur Android</div>
+      <p style="font-size:13px;color:var(--ardoise);line-height:1.55">Installez l’app gratuite <b>ICSx⁵</b> (Play Store), touchez <b>+</b>, collez l’adresse : les RDV apparaissent dans l’agenda du téléphone (Google Agenda compris).</p>`:''}
+    <label style="display:flex;gap:10px;align-items:flex-start;margin-top:16px;font-size:13px;cursor:pointer"><input type="checkbox" id="ag-ok" ${agendaAbonne()?'checked':''} onchange="marquerAgenda(this.checked)" style="margin-top:3px">
+      <span>C’est fait : cet appareil est abonné.<br><span class="muted" style="font-size:12px">Les boutons « Calendrier » des rendez-vous sont alors masqués, pour éviter les doublons.</span></span></label>`,
+    `<button class="btn btn-ghost" onclick="openMesDonnees()">Retour</button><button class="btn btn-primary" onclick="closeModal()">Fermer</button>`);
+}
+function marquerAgenda(oui){try{oui?localStorage.setItem(CLE_AGENDA,'1'):localStorage.removeItem(CLE_AGENDA);}catch(e){}toast(oui?'Agenda abonné : les RDV arriveront tout seuls.':'Boutons « Calendrier » réaffichés.','📅');}
+function copierTexte(t){
+  const ok=()=>toast('Adresse copiée','📋');
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(ok,()=>{});
+  else{const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');ok();}catch(e){}a.remove();}
 }
 function oublierServeurConnecte(){
   confirmModal('Délier cet appareil','Cet appareil ne se synchronisera plus et vous serez déconnecté. Les données restent sur l’appareil ; tout est aussi sur le serveur.',()=>{
@@ -4925,16 +4960,31 @@ function ligneSmsRdv(r,l){
   if(smsFait(r,'rappel'))out.push(`✓ Rappel envoyé${auto(r.rappel)} le ${fmtDateTime(r.rappel.envoye)}`);
   return out.length?`<div class="t-sub" style="color:var(--vert)">${out.join(' · ')}</div>`:'';
 }
+function boutonCalendrier(r){return agendaAbonne()?'':`<button class="btn btn-outline btn-sm" onclick="calendrierRdv(${r.id})">Calendrier</button>`;}
 function boutonsSmsRdv(r,l){
-  if(!telSmsPf(l.tel)||debutRdv(r)<new Date())return `<button class="btn btn-outline btn-sm" onclick="calendrierRdv(${r.id})">Calendrier</button>`;
+  if(!telSmsPf(l.tel)||debutRdv(r)<new Date())return boutonCalendrier(r);
   return `${!smsFait(r,'sms')?`<button class="btn btn-sm btn-ambre" onclick="envoyerSmsRdv(${r.id},false)">SMS de confirmation</button>`:''}
     ${rappelDispo(r)?`<button class="btn btn-sm btn-ambre" onclick="envoyerSmsRdv(${r.id},true)">SMS de rappel</button>`:''}
-    <button class="btn btn-outline btn-sm" onclick="calendrierRdv(${r.id})">Calendrier</button>`;
+    ${boutonCalendrier(r)}`;
 }
 /* ── Relais SMS : la file d'envoi automatique ──
    Publiée sur le serveur avec l'état ; le téléphone de chaque commercial (raccourci « Relais SMS bureau »,
    MacroDroid) récupère les SMS qui lui reviennent, les envoie et les déclare envoyés. */
 const cleSmsAuto=(r,rappel)=>(rappel?'r':'c')+r.id+'-'+String((r.date||'')+(r.heure||'')).replace(/\D/g,'');
+/* ── Agenda par abonnement : les RDV publiés pour le calendrier de chacun ── */
+function agendaPourAbonnement(){
+  const depuis=Date.now()-60*864e5,out=[];
+  for(const r of RDVS){
+    if(r.annule)continue;
+    const l=LEADS.find(x=>x.id===r.leadId);if(!l)continue;
+    const ev=evenementRdv(r,l);if(!(ev.debut instanceof Date)||isNaN(ev.debut)||+ev.fin<depuis)continue;
+    if(stage(l.stage).lost&&+ev.debut>Date.now()&&!r.fait)continue;      /* prospect perdu : RDV à venir retiré */
+    out.push({uid:ev.uid,pour:r.commercialId||l.commercialId,debut:ev.debut.toISOString(),fin:ev.fin.toISOString(),titre:ev.titre,lieu:ev.lieu||'',notes:ev.notes||'',fait:!!r.fait});
+  }
+  return out;
+}
+const CLE_AGENDA=STORE_KEY+'_agendaAbonne';
+const agendaAbonne=()=>{try{return synchroActive()&&localStorage.getItem(CLE_AGENDA)==='1';}catch(e){return false;}};
 function smsPourRelais(){
   const out=[],maint=Date.now();
   for(const r of RDVS){
