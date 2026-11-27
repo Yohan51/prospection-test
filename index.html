@@ -388,6 +388,7 @@ tbody tr:hover{background:var(--bleu-pale);}
 .planner-nav .wk{font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;font-size:16px;color:var(--marine);min-width:190px;}
 .planner-nav .nav-btn{width:38px;height:38px;border-radius:50%;border:2px solid var(--trait-fort);display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--marine);background:#fff;transition:all .15s;}
 .planner-nav .nav-btn:hover{border-color:var(--vert);color:var(--vert-fonce);}
+.planner-nav .nav-btn.nav-txt{width:auto;min-width:38px;padding:0 14px;border-radius:19px;font-size:13.5px;font-weight:600;white-space:nowrap;}
 .week-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;align-items:start;}
 .day-col{background:var(--blanc);border:1px solid var(--trait);border-radius:var(--r-m);overflow:hidden;min-height:120px;display:flex;flex-direction:column;box-shadow:var(--ombre-s);}
 .day-col.is-today{border-color:var(--vert);box-shadow:0 0 0 2px rgba(76,162,52,.18);}
@@ -3853,7 +3854,7 @@ function planningView(scope){
   if(!_weekStart)_weekStart=mondayOf(new Date());
   return `<div class="planner-nav">
       <button class="nav-btn" onclick="shiftWeek(-1)">‹</button>
-      <button class="nav-btn" onclick="shiftWeek(0)">Aujourd'hui</button>
+      <button class="nav-btn nav-txt" onclick="shiftWeek(0)">Aujourd’hui</button>
       <button class="nav-btn" onclick="shiftWeek(1)">›</button>
       <span class="wk" id="wk-label"></span>
     </div>
