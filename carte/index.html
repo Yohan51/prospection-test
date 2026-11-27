@@ -2166,7 +2166,11 @@ try { Object.assign(synchro, JSON.parse(localStorage.getItem(CLE_SY)) || {}); } 
 if (!synchro.appareil) synchro.appareil = uid().replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32);
 const garderSynchro = () => { try { localStorage.setItem(CLE_SY, JSON.stringify(synchro)); } catch (e) {} };
 garderSynchro();
-const synchroActive = () => false; // COPIE DE TEST : synchro avec le Pi coupée
+// Dans la plateforme : la carte se synchronise avec le serveur de l'entreprise (espace « carte »), avec le code de la personne connectée
+const synchroActive = () => {
+  if (PF) { let sc = null; try { sc = PF.synchroCarte && PF.synchroCarte(); } catch (e) {} synchro.url = sc ? sc.url : ''; synchro.code = sc ? sc.code : ''; }
+  return !!(synchro.url && synchro.code);
+};
 const typeAppareil = () => /ipad/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? 'iPad' : /iphone/i.test(navigator.userAgent) ? 'iPhone' : /mac/i.test(navigator.userAgent) ? 'Mac' : 'Appareil';
 const nomAppareil = () => `${typeAppareil()}${estTelPro() ? ' pro' : ''}${etat.moi ? ' de ' + etat.moi : ''}`;
 /* Identifiant envoyé au Pi : tiré du prénom et du type d'appareil (« yohan-iphone »), et non plus tiré au hasard.
@@ -2180,7 +2184,6 @@ function etatPourEnvoi(avecPhotos) {
     relaisSms: etat.relaisSms || {}, objectifs: etat.objectifs || {}, smsAFaire: smsPourRelais(), smsFaits: smsFaitsTexte() };
 }
 async function appelPi(chemin, opts = {}) {
-  throw new Error('copie de test : synchro désactivée');
   const base = synchro.url.replace(/\/+$/, '');
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), opts.delai || 20000);
   try {
@@ -3176,12 +3179,13 @@ $('#b-menu').onclick = (demande) => {
       ${estTelPro() ? `<label class="coche"><input type="checkbox" id="i-relais"${relaisActif() ? ' checked' : ''}>Envoi automatique par le raccourci « Relais SMS », même pour les rendez-vous pris sur un autre appareil</label>` : ''}
       ${relaisActif() ? `<p class="sous" style="margin:0">${esc(texteRelaisPasse())}</p>` : ''}
       <h3>Synchronisation avec le Pi</h3>
-      <p class="sous" style="margin:0;color:#b4501c"><b>Copie de test :</b> la synchro est coupée, pour ne jamais toucher ta vraie carte. Pour tester avec tes vraies portes, exporte un fichier depuis ta vraie carte (Partager par fichier) et importe-le ici.</p>
+      ${PF ? `<p class="sous" style="margin:0">La carte se synchronise avec le serveur de l’entreprise, en même temps que la plateforme${synchroActive() ? '' : ' (pas encore relié : connecte-toi au serveur depuis l’écran de connexion de la plateforme)'}.</p>
+      <p class="sous" style="margin:0" id="etat-synchro">${esc(texteEtatSynchro())}</p>
+      ${synchroActive() ? '<div class="ligne-btns"><button class="b2 plein" id="sy-ok">Synchroniser maintenant</button></div>' : ''}` : `
       <p class="sous" style="margin:0" id="etat-synchro">${esc(texteEtatSynchro())}</p>
       <label class="champ">Adresse du Pi<input id="sy-url" type="url" value="${esc(synchro.url)}" placeholder="https://homeassistant.xxxx.ts.net:8443" autocomplete="off" autocapitalize="off"></label>
       <label class="champ">Code d’équipe<input id="sy-code" type="password" value="${esc(synchro.code)}" placeholder="le même sur tous vos appareils" autocomplete="off" autocapitalize="off"></label>
-      <div class="ligne-btns"><button class="b2 plein" id="sy-ok">${synchroActive() ? 'Synchroniser maintenant' : 'Tester et activer'}</button>${synchroActive() ? '<button class="b2" id="sy-off">Désactiver</button>' : ''}</div>
-      ${synchroActive() ? '<button class="lien" id="sy-menage">Nettoyer les anciens appareils (inactifs depuis 2 jours)</button>' : ''}
+      <div class="ligne-btns"><button class="b2 plein" id="sy-ok">${synchroActive() ? 'Synchroniser maintenant' : 'Tester et activer'}</button>${synchroActive() ? '<button class="b2" id="sy-off">Désactiver</button>' : ''}</div>`}
       <h3>Zone de chalandise</h3>
       <p class="sous" style="margin:0">${dureeTxt(reglageZone.minutes)} de route depuis ${esc(reglageZone.nom)}.</p>
       <div class="ligne-btns"><button class="b2" id="b-zone-regler">Régler la zone</button></div>
@@ -3217,7 +3221,8 @@ $('#b-menu').onclick = (demande) => {
     })();
     f.querySelector('#i-moi').onchange = e => { etat.moi = e.target.value.trim(); sauver(); dessiner(); toast('Prénom enregistré'); };
     f.querySelector('#b-export').onclick = exporter;
-    f.querySelector('#sy-ok').onclick = async () => {
+    if (f.querySelector('#sy-ok')) f.querySelector('#sy-ok').onclick = async () => {
+      if (PF) { $('#etat-synchro').textContent = 'Synchronisation…'; await synchroniser(true); const e = $('#etat-synchro'); if (e) e.textContent = texteEtatSynchro(); return; }
       const url = f.querySelector('#sy-url').value.trim(), code = f.querySelector('#sy-code').value.trim();
       if (!/^https:\/\//i.test(url)) return toast('L’adresse du Pi doit commencer par https://');
       if (!code) return toast('Saisis le code d’équipe.');

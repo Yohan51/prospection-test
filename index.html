@@ -681,20 +681,12 @@ tbody tr:hover{background:var(--bleu-pale);}
       <h2>Connexion</h2>
       <p class="lead">Accédez à votre espace de travail.</p>
       <div class="login-error" id="login-error"></div>
-      <form onsubmit="event.preventDefault();doLogin();">
-        <div class="field">
-          <label for="login-email">Adresse e-mail</label>
-          <input type="email" id="login-email" placeholder="vous@sublime-toit.fr" autocomplete="username">
-        </div>
-        <div class="field">
-          <label for="login-pwd">Mot de passe</label>
-          <input type="password" id="login-pwd" placeholder="••••••••" autocomplete="current-password">
-        </div>
-        <button type="submit" class="btn btn-primary btn-full btn-lg">Se connecter</button>
-      </form>
+      <form onsubmit="event.preventDefault();connexionServeur();"><div id="login-serveur"></div></form>
 
-      <div class="demo-sep">Démo — choisir un rôle</div>
-      <div class="role-grid" id="role-grid"></div>
+      <div id="login-demo">
+        <div class="demo-sep">Démo — choisir un rôle (sans serveur)</div>
+        <div class="role-grid" id="role-grid"></div>
+      </div>
     </div>
   </main>
 </div>
@@ -1097,13 +1089,14 @@ function suivreEtapes(){
     l._etapeVue=l.stage;
   }
 }
-function saveStore(){
+function saveStore(sansMarquer,sansPlanifier){
   try{
-    suivreEtapes();
-    suivreChangements(true);
+    if(!sansMarquer)suivreEtapes();
+    suivreChangements(!sansMarquer);
     const cols={};for(const col in COLS)cols[col]=COLS[col]().map(r=>r);
     localStorage.setItem(STORE_KEY,JSON.stringify(Object.assign(cols,{PILOTAGE,JOURNAL,STAGES,DASH,SUPPR,MAJ_GLOBAL,MIGR,v:3,_demoRolesV2:_demoRolesMigrated}),remplPhotos));
   }catch(e){console.warn('save',e);toast('Enregistrement impossible : mémoire de l’appareil pleine ?','⚠️');}
+  if(!sansMarquer&&!sansPlanifier&&typeof planifierSynchro==='function')planifierSynchro();
 }
 function loadStore(){
   try{
@@ -1237,6 +1230,266 @@ function seedDemo(){
   saveStore();
 }
 
+/* ═══════════════════════════════════════════════════════════
+   SYNCHRO AVEC LE SERVEUR DE L'ENTREPRISE (Raspberry Pi, via Tailscale)
+   – Connexion : adresse du serveur + code personnel (vérifié par le serveur ; ensuite
+     l'appareil reste connecté, et le code fonctionne aussi hors réseau).
+   – Chaque appareil dépose son état complet sous son propre nom et fusionne ceux des autres :
+     fiche par fiche, la modification la plus récente gagne ; une suppression gagne sur une
+     modification plus ancienne. Les photos sont envoyées une seule fois.
+   – L'équipe vient des comptes du serveur.
+═══════════════════════════════════════════════════════════ */
+const CLE_SYNC=STORE_KEY+'_synchro', CLE_SESSION=STORE_KEY+'_session';
+let SYNC={url:'',code:'',appareil:'',compte:null,empreinteCode:'',etag:'',envoye:'',dernier:'',erreur:'',photosServeur:null};
+try{Object.assign(SYNC,JSON.parse(localStorage.getItem(CLE_SYNC))||{});}catch(e){}
+SYNC.photosServeur=null;
+function garderSync(){try{const {photosServeur,...rest}=SYNC;localStorage.setItem(CLE_SYNC,JSON.stringify(rest));}catch(e){}}
+const synchroActive=()=>!!(SYNC.url&&SYNC.code);
+const normaliserUrl=u=>{u=String(u||'').trim().replace(/\/+$/,'');if(u&&!/^https?:\/\//i.test(u))u='https://'+u;return u;};
+async function empreinteCode(code){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('sublime|'+code));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');}
+
+async function appelServeur(chemin,opts={},cfg){
+  const c=cfg||SYNC,ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),opts.delai||25000);
+  try{
+    const r=await fetch(c.url+chemin,{method:opts.method||'GET',body:opts.body,signal:ctl.signal,cache:'no-store',
+      headers:Object.assign({'X-Code':c.code},opts.headers||{})});
+    if(r.status===401)throw Object.assign(new Error('code incorrect'),{code401:true});
+    if(r.status===429)throw new Error('trop d’essais, patientez quelques minutes');
+    if(r.status===503){let m='serveur pas encore prêt';try{m=(await r.json()).erreur||m;}catch(e){}throw new Error(m);}
+    if(!r.ok&&r.status!==304)throw new Error('le serveur répond '+r.status);
+    return r;
+  }catch(e){if(e.name==='AbortError')throw new Error('le serveur ne répond pas (réseau ou Tailscale coupé ?)');if(e instanceof TypeError)throw Object.assign(new Error('serveur injoignable (Tailscale activé sur ce téléphone ?)'),{horsLigne:true});throw e;}
+  finally{clearTimeout(t);}
+}
+
+/* ── Écran de connexion ── */
+function renderConnexionServeur(){
+  const box=document.getElementById('login-serveur');if(!box)return;
+  const demo=document.getElementById('login-demo');if(demo)demo.style.display=SYNC.url?'none':'';
+  box.innerHTML=SYNC.url
+    ?`<div class="field"><label for="ls-code">Code personnel</label><input type="password" id="ls-code" autocomplete="current-password" placeholder="••••••••"></div>
+      <button type="submit" class="btn btn-primary btn-full btn-lg">Se connecter</button>
+      <p class="muted" style="font-size:12px;margin-top:12px;text-align:center">Serveur : ${esc(SYNC.url.replace(/^https?:\/\//,''))} · <a href="#" onclick="event.preventDefault();oublierServeur()">changer</a></p>`
+    :`<div class="field"><label for="ls-url">Adresse du serveur de l’entreprise</label><input id="ls-url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="sublime-pi.xxxx.ts.net"></div>
+      <div class="field"><label for="ls-code">Code personnel</label><input type="password" id="ls-code" autocomplete="current-password" placeholder="••••••••"></div>
+      <button type="submit" class="btn btn-primary btn-full btn-lg">Se connecter</button>
+      <p class="muted" style="font-size:12px;margin-top:10px">Tailscale doit être activé sur cet appareil.</p>`;
+  const h=(location.hash.match(/serveur=([^&]+)/)||[])[1];
+  if(h&&document.getElementById('ls-url'))document.getElementById('ls-url').value=decodeURIComponent(h);
+}
+function oublierServeur(){
+  confirmModal('Changer de serveur','Cet appareil ne sera plus relié au serveur actuel. Les données restent sur l’appareil.',()=>{
+    SYNC={url:'',code:'',appareil:'',compte:null,empreinteCode:'',etag:'',envoye:'',dernier:'',erreur:'',photosServeur:null};
+    garderSync();try{localStorage.removeItem(CLE_SESSION);}catch(e){}renderConnexionServeur();
+  },'Changer',true);
+}
+function erreurLogin(m){const err=document.getElementById('login-error');err.textContent=m;err.classList.add('show');}
+async function connexionServeur(){
+  const code=(val('ls-code')||'').trim(),url=SYNC.url||normaliserUrl(val('ls-url'));
+  if(!url)return erreurLogin('Indiquez l’adresse du serveur.');
+  if(!code)return erreurLogin('Indiquez votre code personnel.');
+  document.getElementById('login-error').classList.remove('show');
+  const btn=document.querySelector('#login-serveur button[type=submit]');if(btn){btn.disabled=true;btn.textContent='Connexion…';}
+  const fin=()=>{if(btn){btn.disabled=false;btn.textContent='Se connecter';}};
+  let moi=null,equipe=null;
+  try{
+    moi=await (await appelServeur('/moi',{},{url,code})).json();
+    equipe=(await (await appelServeur('/equipe',{},{url,code})).json()).equipe;
+  }catch(e){
+    /* Hors réseau : on accepte le code déjà vérifié une fois sur cet appareil */
+    if(e.horsLigne&&SYNC.url===url&&SYNC.empreinteCode&&SYNC.compte&&await empreinteCode(code)===SYNC.empreinteCode){
+      fin();SYNC.code=code;return ouvrirSessionServeur(true);}
+    fin();return erreurLogin(e.code401?'Code incorrect.':'Connexion impossible : '+e.message);
+  }
+  const premiere=!SYNC.url||!SYNC.compte||SYNC.compte.id!==moi.id;
+  const suite=async()=>{
+    Object.assign(SYNC,{url,code,compte:moi,empreinteCode:await empreinteCode(code),erreur:''});
+    if(!SYNC.appareil||premiere)SYNC.appareil=('pf-'+moi.id+'-'+Math.random().toString(36).slice(2,8)).replace(/[^A-Za-z0-9_-]/g,'');
+    if(premiere){SYNC.etag='';SYNC.envoye='';}
+    garderSync();appliquerEquipe(equipe);fin();ouvrirSessionServeur(false);
+  };
+  /* Première connexion : les données de démonstration ne doivent pas partir sur le serveur */
+  const demoPresente=!localStorage.getItem(STORE_KEY+'_demoVidee')&&(LEADS.length||RDVS.length||CHANTIERS.length);
+  if(premiere&&demoPresente){
+    fin();
+    confirmModal('Première connexion',`Cet appareil contient ${LEADS.length} prospect(s) et ${CHANTIERS.length} chantier(s) de démonstration. Ils vont être effacés pour ne pas être envoyés au serveur de l’entreprise. (Si vous y aviez saisi de vraies données, annulez et faites d’abord une sauvegarde depuis « Mes données ».)`,()=>{
+      LEADS=[];RDVS=[];CHANTIERS=[];CHARGES=[];ENCAISSEMENTS=[];JOURNAL=[];SUPPR=[];MAJ_GLOBAL={};
+      oublierEmpreintes();suivreChangements(false);try{localStorage.setItem(STORE_KEY+'_demoVidee','1');}catch(e){}
+      saveStore(true);suite();
+    },'Effacer et continuer',true);
+    return;
+  }
+  suite();
+}
+function ouvrirSessionServeur(horsLigne){
+  const m=teamMember(SYNC.compte.id);
+  if(!m)return erreurLogin('Compte introuvable dans l’équipe : reconnectez-vous avec le réseau.');
+  try{localStorage.setItem(CLE_SESSION,m.id);}catch(e){}
+  setVal('ls-code','');
+  loginById(m.id);
+  if(horsLigne)toast('Hors réseau : la synchro reprendra dès que possible.','📴');
+  synchroniser();
+}
+/* Au démarrage : l'appareil déjà relié reste connecté (jusqu'à « Déconnexion ») */
+function reprendreSession(){
+  if(!synchroActive())return false;
+  let id='';try{id=localStorage.getItem(CLE_SESSION)||'';}catch(e){}
+  if(!id||!teamMember(id))return false;
+  loginById(id);setTimeout(()=>synchroniser(),300);return true;
+}
+
+/* ── L'équipe = les comptes du serveur ── */
+function appliquerEquipe(liste){
+  if(!Array.isArray(liste)||!liste.length)return;
+  const ids=new Set(liste.map(c=>c.id));
+  TEAM=TEAM.filter(t=>ids.has(t.id));
+  for(const c of liste){
+    const m=TEAM.find(t=>t.id===c.id),v={name:c.nom||c.id,role:c.role||'commercial',email:c.email||''};
+    if(m){for(const k in v)if(m[k]!==v[k]&&(k!=='email'||v[k]))m[k]=v[k];}
+    else TEAM.push({id:c.id,...v,tel:c.tel||'',secteur:''});
+  }
+  saveStore();
+}
+
+/* ── Fusion d'un état reçu ── */
+const COLS_SYNC=['LEADS','RDVS','CHANTIERS','CHARGES','ENCAISSEMENTS'], GLOBAUX_SYNC=['PILOTAGE','STAGES'];
+function remplacerContenu(cible,src){for(const k of Object.keys(cible))delete cible[k];Object.assign(cible,src);}
+function fusionnerEtat(e){
+  let n=0;
+  const supprLoc=new Map(SUPPR.map(s=>[s.col+':'+s.id,s]));
+  for(const s of (Array.isArray(e.SUPPR)?e.SUPPR:[])){
+    if(!COLS_SYNC.includes(s.col))continue;
+    const k=s.col+':'+s.id,ex=supprLoc.get(k);
+    if(!ex||(s.maj||0)>(ex.maj||0)){supprLoc.set(k,s);SUPPR=SUPPR.filter(x=>!(x.col===s.col&&String(x.id)===String(s.id)));SUPPR.push(s);}
+    const arr=COLS[s.col](),i=arr.findIndex(r=>String(r.id)===String(s.id));
+    if(i>=0&&(arr[i].maj||0)<=(s.maj||0)&&!(_r1&&s.col==='LEADS'&&_r1.leadId===arr[i].id)){arr.splice(i,1);n++;}
+  }
+  for(const col of COLS_SYNC){
+    const arr=COLS[col](),parId=new Map(arr.map(r=>[String(r.id),r]));
+    for(const rr of (Array.isArray(e[col])?e[col]:[])){
+      if(!rr||rr.id==null)continue;
+      const k=String(rr.id),s=supprLoc.get(col+':'+k);
+      if(s&&(s.maj||0)>=(rr.maj||0))continue;
+      const lr=parId.get(k);
+      if(!lr){const copie=JSON.parse(JSON.stringify(rr));arr.push(copie);parId.set(k,copie);n++;}
+      else if((rr.maj||0)>(lr.maj||0)){
+        if(col==='LEADS'&&_r1&&_r1.leadId===lr.id)continue;   /* fiche R1 ouverte : on attend qu'elle soit fermée */
+        remplacerContenu(lr,JSON.parse(JSON.stringify(rr)));n++;
+      }
+    }
+  }
+  const mg=e.MAJ_GLOBAL||{};
+  for(const g of GLOBAUX_SYNC){
+    if(e[g]&&(mg[g]||0)>(MAJ_GLOBAL[g]||0)){
+      if(g==='PILOTAGE')PILOTAGE=JSON.parse(JSON.stringify(e[g]));
+      if(g==='STAGES'&&Array.isArray(e[g])&&e[g].length)STAGES=JSON.parse(JSON.stringify(e[g]));
+      MAJ_GLOBAL[g]=mg[g];n++;
+    }
+  }
+  if(Array.isArray(e.JOURNAL)&&e.JOURNAL.length){
+    const cle=j=>j.ts+'|'+j.who+'|'+j.action+'|'+j.cible,vus=new Set(JOURNAL.map(cle));let aj=0;
+    for(const j of e.JOURNAL)if(j&&j.ts&&!vus.has(cle(j))){JOURNAL.push(j);vus.add(cle(j));aj++;}
+    if(aj){JOURNAL.sort((a,b)=>b.ts-a.ts);if(JOURNAL.length>500)JOURNAL.length=500;}
+  }
+  return n;
+}
+
+/* ── Photos : références « idb:… » reçues → images ── */
+function blobVersDataUrl(b){return new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=ko;r.readAsDataURL(b);});}
+async function resoudrePhotos(){
+  const manquantes=new Set();
+  const marcher=(o,f)=>{if(Array.isArray(o)){for(let i=0;i<o.length;i++){const v=o[i];if(typeof v==='string'){if(v.startsWith('idb:'))f(o,i,v.slice(4));}else if(v&&typeof v==='object')marcher(v,f);}}
+    else if(o&&typeof o==='object')for(const k in o){const v=o[k];if(typeof v==='string'){if(v.startsWith('idb:'))f(o,k,v.slice(4));}else if(v&&typeof v==='object')marcher(v,f);}};
+  const remplacer=()=>[LEADS,RDVS,CHANTIERS].forEach(c=>marcher(c,(o,k,id)=>{const d=_photoData.get(id);if(d)o[k]=d;else manquantes.add(id);}));
+  remplacer();
+  if(!manquantes.size)return 0;
+  let n=0;
+  for(const id of manquantes){
+    if(!/^[A-Za-z0-9_-]{1,80}$/.test(id))continue;
+    try{
+      const d=await blobVersDataUrl(await (await appelServeur('/pf/photo/'+id)).blob());
+      _photoIds.set(d,id);_photoData.set(id,d);n++;
+      photoDb().then(db=>{const t=db.transaction('p','readwrite');t.objectStore('p').put(d,id);}).catch(()=>{});
+    }catch(e){console.warn('photo',id,e.message);}
+  }
+  manquantes.clear();remplacer();
+  return n;
+}
+async function envoyerPhotos(texte){
+  const ids=[...new Set((texte.match(/idb:ph[A-Za-z0-9]+/g)||[]).map(x=>x.slice(4)))];
+  if(!ids.length)return;
+  if(!SYNC.photosServeur)SYNC.photosServeur=new Set((await (await appelServeur('/pf/photos')).json()).photos||[]);
+  for(const id of ids){
+    if(SYNC.photosServeur.has(id))continue;
+    const d=_photoData.get(id);if(!d)continue;
+    await appelServeur('/pf/photo/'+id,{method:'PUT',body:dataUrlVersBlob(d),delai:60000});
+    SYNC.photosServeur.add(id);
+  }
+}
+
+/* ── Cycle de synchro ── */
+let _syncEnCours=null,_syncMinuterie=null,_aRafraichir=false;
+function planifierSynchro(ms){if(!synchroActive()||!session)return;clearTimeout(_syncMinuterie);_syncMinuterie=setTimeout(()=>synchroniser(),ms||4000);}
+function rienDOuvert(){return !document.getElementById('modal-bd').classList.contains('open')&&!document.querySelector('.r1-screen.open')&&!document.querySelector('#draw-screen.open');}
+function rafraichirVue(){
+  if(!session)return;
+  if(!rienDOuvert()){_aRafraichir=true;return;}
+  _aRafraichir=false;const v=currentView();
+  if(v!=='prospection')go(v);else{const w=stpCarte();if(w)try{w.dessiner();}catch(e){}}
+  majBoutonSauvegarde();
+}
+function etatPourEnvoi(){
+  return JSON.stringify({app:'sublime-toit',v:3,appareil:SYNC.appareil,par:session.id,
+    LEADS,RDVS,CHANTIERS,CHARGES,ENCAISSEMENTS,PILOTAGE,STAGES,JOURNAL:JOURNAL.slice(0,300),SUPPR,MAJ_GLOBAL},remplPhotos);
+}
+function synchroniser(manuel){
+  if(!synchroActive()||!session)return Promise.resolve(false);
+  if(_syncEnCours)return _syncEnCours;
+  _syncEnCours=(async()=>{
+    try{
+      saveStore(false,true);                                   /* d'abord, nos propres modifications */
+      const r=await appelServeur('/pf/etats?sauf='+encodeURIComponent(SYNC.appareil),{headers:SYNC.etag&&!manuel?{'If-None-Match':SYNC.etag}:{}});
+      let recus=0;
+      if(r.status!==304){
+        const j=await r.json();
+        for(const a of j.appareils||[])if(a&&a.etat&&a.etat.app==='sublime-toit')recus+=fusionnerEtat(a.etat);
+        SYNC.etag=r.headers.get('ETag')||'';
+        if(recus){saveStore(true);await resoudrePhotos();saveStore(true);}
+      }
+      /* Équipe (nouveaux comptes, changements de rôle) : de temps en temps */
+      if(manuel||!SYNC.equipeLe||Date.now()-SYNC.equipeLe>3600e3){
+        try{appliquerEquipe((await (await appelServeur('/equipe')).json()).equipe);SYNC.equipeLe=Date.now();}catch(e){}
+      }
+      const texte=etatPourEnvoi(),emp=hashTxt(texte);
+      if(emp!==SYNC.envoye||manuel){
+        await envoyerPhotos(texte);
+        await appelServeur('/pf/etat/'+SYNC.appareil,{method:'PUT',body:texte,headers:{'Content-Type':'application/json'},delai:60000});
+        SYNC.envoye=emp;
+      }
+      SYNC.dernier=new Date().toISOString();SYNC.erreur='';garderSync();
+      if(recus||_aRafraichir)rafraichirVue();else majBoutonSauvegarde();
+      if(manuel)toast(recus?`Synchronisé : ${recus} changement(s) reçu(s)`:'Synchronisé, tout est à jour','🔄');
+      return true;
+    }catch(e){
+      SYNC.erreur=e.message||String(e);garderSync();majBoutonSauvegarde();
+      if(manuel)toast('Synchro impossible : '+SYNC.erreur,'⚠️');
+      if(e.code401)toast('Votre code n’est plus accepté par le serveur : reconnectez-vous.','⚠️');
+      return false;
+    }finally{_syncEnCours=null;}
+  })();
+  return _syncEnCours;
+}
+setInterval(()=>{if(document.visibilityState==='visible')synchroniser();},60000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')planifierSynchro(500);});
+addEventListener('online',()=>planifierSynchro(1000));
+/* Pour la carte intégrée : même serveur, espace « carte », même code */
+function synchroCarte(){return synchroActive()?{url:SYNC.url+'/carte',code:SYNC.code}:null;}
+function texteEtatSynchro(){
+  if(!synchroActive())return'';
+  const d=SYNC.dernier?Math.round((Date.now()-new Date(SYNC.dernier))/60000):null;
+  return SYNC.erreur?'⚠️ '+SYNC.erreur:d===null?'Pas encore synchronisé':d<1?'Synchronisé à l’instant':d<60?`Synchronisé il y a ${d} min`:`Synchronisé il y a ${Math.round(d/60)} h`;
+}
+
 /* ─────────── Démarrage ─────────── */
 async function boot(){
   document.querySelectorAll('img[data-logo]').forEach(i=>i.src=LOGO_URI);
@@ -1247,6 +1500,8 @@ async function boot(){
   if(migre||!localStorage.getItem(STORE_KEY))saveStore();
   else{try{if(JSON.parse(localStorage.getItem(STORE_KEY)).v!==3)saveStore();}catch(e){}}
   renderRoleGrid();
+  renderConnexionServeur();
+  reprendreSession();
 }
 
 /* ─────────── Écran de connexion ─────────── */
@@ -1294,8 +1549,10 @@ function loginAs(role,name,email,id){
 function doLogout(){
   const cadre=document.getElementById('prospection-cadre');if(cadre)cadre.remove();
   majOngletsProspects(null);
+  if(synchroActive()){saveStore(false,true);synchroniser();try{localStorage.removeItem(CLE_SESSION);}catch(e){}}
   session=null;
   document.getElementById('app').classList.remove('active');
+  renderConnexionServeur();
   document.getElementById('screen-login').classList.add('active');
   setVal('login-pwd','');
 }
@@ -4178,7 +4435,7 @@ VIEWS.reglages=function(){
       <p class="muted" style="font-size:13px;margin-bottom:14px;line-height:1.6">Cette version fonctionne en local (sur cet appareil). La sauvegarde exporte <b>toutes</b> les données, y compris la trésorerie, dans un fichier que vous pouvez réimporter ici (sur cet appareil ou un autre). La connexion au serveur partagé sera branchée après validation de l'interface.</p>
       <div class="flex gap" style="flex-wrap:wrap">
         <button class="btn btn-primary" onclick="openMesDonnees()">Sauvegarder, restaurer ou vider…</button>
-        <button class="btn btn-outline" onclick="resetData()">Recharger les données de démo</button>
+        ${synchroActive()?'':`<button class="btn btn-outline" onclick="resetData()">Recharger les données de démo</button>`}
       </div>
     </div></div>
     <div class="card"><div class="card-hd"><div><h3>Journal d'activité</h3><div class="sub">Traçabilité des actions</div></div></div>
@@ -4259,9 +4516,11 @@ function deleteStage(key){
 const CLE_SAUVEGARDE=STORE_KEY+'_derniereSauvegarde', JOURS_RAPPEL_SAUVEGARDE=7;
 function derniereSauvegarde(){try{return localStorage.getItem(CLE_SAUVEGARDE)||'';}catch(e){return'';}}
 function joursDepuisSauvegarde(){const d=derniereSauvegarde();return d?Math.floor((Date.now()-new Date(d))/86400000):null;}
-function sauvegardeEnRetard(){const j=joursDepuisSauvegarde();return j===null?LEADS.length>0:j>=JOURS_RAPPEL_SAUVEGARDE;}
+function sauvegardeEnRetard(){if(synchroActive())return false;const j=joursDepuisSauvegarde();return j===null?LEADS.length>0:j>=JOURS_RAPPEL_SAUVEGARDE;}
 function majBoutonSauvegarde(){
   const b=document.getElementById('sb-save');if(!b)return;const j=joursDepuisSauvegarde();
+  if(synchroActive()){b.classList.toggle('alerte',!!SYNC.erreur);
+    b.innerHTML=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.2M3 12a9 9 0 0 1 15.5-6.2M21 4v5h-5M3 20v-5h5"/></svg><span>Mes données<small>${esc(texteEtatSynchro())}</small></span>`;return;}
   b.classList.toggle('alerte',sauvegardeEnRetard());
   b.innerHTML=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
     <span>Mes données<small>${j===null?'Jamais sauvegardées':j===0?'Sauvegardées aujourd’hui':'Sauvegardées il y a '+j+' jour'+(j>1?'s':'')}</small></span>`;
@@ -4291,6 +4550,7 @@ async function exportData(){
 }
 function openMesDonnees(){
   const j=joursDepuisSauvegarde();
+  if(synchroActive())return openMesDonneesServeur();
   openModal('Mes données','Plateforme et carte de prospection',`
     <p id="md-etat" style="font-size:13px;color:var(--ardoise);line-height:1.6;margin-bottom:14px">Tes données sont enregistrées <b>uniquement sur cet appareil</b> (pas encore de synchro).
       Une sauvegarde régulière évite de tout perdre si le téléphone est perdu, changé ou réinitialisé.<br>
@@ -4306,6 +4566,27 @@ function openMesDonnees(){
     <p class="muted" style="font-size:12.5px;margin-bottom:10px">Supprime les prospects, rendez-vous et chantiers de démonstration (et tout ce qui a été saisi) sur cet appareil. L’équipe, les étapes du pipeline et les portes de la carte sont conservées.</p>
     <button class="btn btn-danger" onclick="viderDonnees()">Vider les données de démo</button>`,
     `<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>`);
+}
+function openMesDonneesServeur(){
+  openModal('Mes données','Serveur de l’entreprise',`
+    <p id="md-etat" style="font-size:13px;color:var(--ardoise);line-height:1.6;margin-bottom:14px">
+      Connecté en tant que <b>${esc(SYNC.compte?SYNC.compte.nom:session.name)}</b> au serveur <b>${esc(SYNC.url.replace(/^https?:\/\//,''))}</b>.<br>
+      <b>${esc(texteEtatSynchro())}</b><br>
+      Vos données sont partagées avec l’équipe et sauvegardées chaque nuit sur le serveur.</p>
+    <button class="btn btn-primary" onclick="synchroniser(true).then(()=>{if(document.getElementById('md-etat'))openMesDonneesServeur();})">🔄 Synchroniser maintenant</button>
+    <div class="sec-lbl" style="margin-top:20px">Copie sur cet appareil</div>
+    <p class="muted" style="font-size:12.5px;margin-bottom:10px">En plus, vous pouvez garder une copie personnelle (fichier) : sur iPhone, « Enregistrer dans Fichiers ».</p>
+    <button class="btn btn-outline" onclick="exportData()">💾 Télécharger une copie</button>
+    <div class="sec-lbl" style="margin-top:20px">Cet appareil</div>
+    <p class="muted" style="font-size:12.5px;margin-bottom:10px">Identifiant de synchro : ${esc(SYNC.appareil)}</p>
+    <button class="btn btn-outline" onclick="closeModal();oublierServeurConnecte()">Délier cet appareil du serveur</button>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>`);
+}
+function oublierServeurConnecte(){
+  confirmModal('Délier cet appareil','Cet appareil ne se synchronisera plus et vous serez déconnecté. Les données restent sur l’appareil ; tout est aussi sur le serveur.',()=>{
+    SYNC={url:'',code:'',appareil:'',compte:null,empreinteCode:'',etag:'',envoye:'',dernier:'',erreur:'',photosServeur:null};garderSync();
+    try{localStorage.removeItem(CLE_SESSION);}catch(e){}doLogout();
+  },'Délier',true);
 }
 function viderDonnees(){
   confirmModal('Vider les données',`Supprimer ${LEADS.length} prospect(s), ${RDVS.length} rendez-vous et ${CHANTIERS.length} chantier(s) sur cet appareil ? L’équipe, les étapes et la carte sont conservées. Pensez à sauvegarder avant si vous aviez saisi de vraies données.`,()=>{
@@ -4439,6 +4720,7 @@ function stpPrestation(besoins){
 }
 const _stpGeoTentes=new Set();
 window.STP={
+  synchroCarte,
   /* Qui utilise la carte : le compte connecté à la plateforme */
   moi(){return session?{id:session.id,prenom:titleCase(String(session.name).split(' ')[0]),role:session.role}:null;},
   /* Chantiers de la plateforme placés sur la carte (géocodés si besoin) */
