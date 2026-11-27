@@ -1440,7 +1440,7 @@ function rafraichirVue(){
 }
 function etatPourEnvoi(){
   return JSON.stringify({app:'sublime-toit',v:3,appareil:SYNC.appareil,par:session.id,
-    LEADS,RDVS,CHANTIERS,CHARGES,ENCAISSEMENTS,PILOTAGE,STAGES,JOURNAL:JOURNAL.slice(0,300),SUPPR,MAJ_GLOBAL},remplPhotos);
+    LEADS,RDVS,CHANTIERS,CHARGES,ENCAISSEMENTS,PILOTAGE,STAGES,JOURNAL:JOURNAL.slice(0,300),SUPPR,MAJ_GLOBAL,smsAFaire:smsPourRelais()},remplPhotos);
 }
 function synchroniser(manuel){
   if(!synchroActive()||!session)return Promise.resolve(false);
@@ -1456,6 +1456,7 @@ function synchroniser(manuel){
         SYNC.etag=r.headers.get('ETag')||'';
         if(recus){saveStore(true);await resoudrePhotos();saveStore(true);}
       }
+      try{if(await lireEnvoisRelais()){recus++;saveStore(false,true);}}catch(e){}
       /* Équipe (nouveaux comptes, changements de rôle) : de temps en temps */
       if(manuel||!SYNC.equipeLe||Date.now()-SYNC.equipeLe>3600e3){
         try{appliquerEquipe((await (await appelServeur('/equipe')).json()).equipe);SYNC.equipeLe=Date.now();}catch(e){}
@@ -4902,15 +4903,16 @@ function htmlJourneePf(){
 
 /* ── SMS de confirmation et rappel ── */
 function telSmsPf(t){let n=String(t||'').replace(/[^+\d]/g,'');if(/^0\d{9}$/.test(n))n='+33'+n.slice(1);return n.length>=10?n:'';}
-function signatureSms(){const m=session&&teamMember(session.id);const parts=String(m?m.name:'').trim().split(/\s+/);return `${parts[0]||''}${parts.length>1?' '+parts.slice(1).join(' ').toUpperCase():''} – SUBLIME TOIT`.trim();}
+function signatureSms(id){const m=teamMember(id||(session&&session.id));const parts=String(m?m.name:'').trim().split(/\s+/);return `${parts[0]||''}${parts.length>1?' '+parts.slice(1).join(' ').toUpperCase():''} – SUBLIME TOIT`.trim();}
 const cleRdv=r=>`${r.date}|${r.heure||''}`;
-function texteSmsRdv(r,l,rappel){
+function texteSmsRdv(r,l,rappel,auto){
+  const qui=auto?(r.commercialId||l.commercialId):null,signatureSms_=()=>signatureSms(qui);
   const d=debutRdv(r),nom=l.nom&&!/^Porte /.test(l.nom)?' '+l.nom:'',adr=adrLead(l),lieu=adr?' au '+adr:'',h=`${d.getHours()}h${d.getMinutes()?String(d.getMinutes()).padStart(2,'0'):''}`;
-  if(rappel){const q=jourLocal(d)===jourLocal(new Date())?'aujourd’hui':'demain '+d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-    return `Bonjour${nom}, petit rappel : nous avons rendez-vous ${q} à ${h}${lieu}. Merci de répondre à ce SMS pour me confirmer votre présence. À bientôt, ${signatureSms()}`;}
+  if(rappel){const q=auto?'le '+d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}):jourLocal(d)===jourLocal(new Date())?'aujourd’hui':'demain '+d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+    return `Bonjour${nom}, petit rappel : nous avons rendez-vous ${q} à ${h}${lieu}. Merci de répondre à ce SMS pour me confirmer votre présence. À bientôt, ${signatureSms_()}`;}
   const jour=d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-  if(r.type==='R2')return `Bonjour${nom}, suite à notre premier échange, je vous confirme notre second rendez-vous du ${jour} à ${h}${lieu}, pour vous présenter notre proposition. Merci de répondre à ce SMS pour me confirmer votre présence. À bientôt, ${signatureSms()}`;
-  return `Bonjour${nom}, je vous confirme notre rendez-vous du ${jour} à ${h}${lieu}. Merci de répondre à ce SMS pour me confirmer votre présence. À bientôt, ${signatureSms()}`;
+  if(r.type==='R2')return `Bonjour${nom}, suite à notre premier échange, je vous confirme notre second rendez-vous du ${jour} à ${h}${lieu}, pour vous présenter notre proposition. Merci de répondre à ce SMS pour me confirmer votre présence. À bientôt, ${signatureSms_()}`;
+  return `Bonjour${nom}, je vous confirme notre rendez-vous du ${jour} à ${h}${lieu}. Merci de répondre à ce SMS pour me confirmer votre présence. À bientôt, ${signatureSms_()}`;
 }
 const smsFait=(r,k)=>r[k]&&r[k].cle===cleRdv(r);
 /* Rappel : de 16 h la veille jusqu'à 2 h avant, une fois la confirmation partie */
@@ -4918,8 +4920,9 @@ function rappelDispo(r){const d=debutRdv(r),deb=new Date(d);deb.setDate(d.getDat
 function ligneSmsRdv(r,l){
   if(!telSmsPf(l.tel))return '';
   const out=[];
-  if(smsFait(r,'sms'))out.push(`✓ SMS de confirmation envoyé le ${fmtDateTime(r.sms.envoye)}`);
-  if(smsFait(r,'rappel'))out.push(`✓ Rappel envoyé le ${fmtDateTime(r.rappel.envoye)}`);
+  const auto=x=>x.par==='relais'?' automatiquement':'';
+  if(smsFait(r,'sms'))out.push(`✓ SMS de confirmation envoyé${auto(r.sms)} le ${fmtDateTime(r.sms.envoye)}`);
+  if(smsFait(r,'rappel'))out.push(`✓ Rappel envoyé${auto(r.rappel)} le ${fmtDateTime(r.rappel.envoye)}`);
   return out.length?`<div class="t-sub" style="color:var(--vert)">${out.join(' · ')}</div>`:'';
 }
 function boutonsSmsRdv(r,l){
@@ -4928,10 +4931,43 @@ function boutonsSmsRdv(r,l){
     ${rappelDispo(r)?`<button class="btn btn-sm btn-ambre" onclick="envoyerSmsRdv(${r.id},true)">SMS de rappel</button>`:''}
     <button class="btn btn-outline btn-sm" onclick="calendrierRdv(${r.id})">Calendrier</button>`;
 }
+/* ── Relais SMS : la file d'envoi automatique ──
+   Publiée sur le serveur avec l'état ; le téléphone de chaque commercial (raccourci « Relais SMS bureau »,
+   MacroDroid) récupère les SMS qui lui reviennent, les envoie et les déclare envoyés. */
+const cleSmsAuto=(r,rappel)=>(rappel?'r':'c')+r.id+'-'+String((r.date||'')+(r.heure||'')).replace(/\D/g,'');
+function smsPourRelais(){
+  const out=[],maint=Date.now();
+  for(const r of RDVS){
+    if(!['R1','R2'].includes(r.type)||r.fait||r.annule)continue;
+    const l=LEADS.find(x=>x.id===r.leadId);if(!l||stage(l.stage).lost)continue;
+    const tel=telSmsPf(l.tel),pour=r.commercialId||l.commercialId,d=debutRdv(r);
+    if(!tel||!pour||!(d instanceof Date)||isNaN(d)||+d<maint+3600e3)continue;
+    const conf=cleSmsAuto(r,false);
+    if(!smsFait(r,'sms'))out.push({k:conf,pour,tel,texte:texteSmsRdv(r,l,false,true),rdv:d.toISOString()});
+    if(!smsFait(r,'rappel')){
+      const veille=new Date(d);veille.setDate(d.getDate()-1);veille.setHours(16,0,0,0);
+      const it={k:cleSmsAuto(r,true),pour,tel,texte:texteSmsRdv(r,l,true,true),rdv:d.toISOString(),apres:veille.toISOString(),requiert:conf};
+      if(smsFait(r,'sms')&&r.sms.par!=='relais'){it.confirmeManuel=true;it.confirmeLe=new Date(r.sms.envoye).toISOString();}
+      out.push(it);
+    }
+  }
+  return out;
+}
+/* Ce que les relais ont envoyé : coché sur les rendez-vous */
+async function lireEnvoisRelais(){
+  const reg=(await (await appelServeur('/pf/sms/envoyes')).json()).envoyes||{};let n=0;
+  for(const r of RDVS)for(const rappel of [false,true]){
+    const k=cleSmsAuto(r,rappel),e=reg[k],ch=rappel?'rappel':'sms';
+    if(e&&!smsFait(r,ch)){r[ch]={cle:cleRdv(r),envoye:+new Date(e.le)||Date.now(),par:'relais'};n++;}
+  }
+  return n;
+}
 function envoyerSmsRdv(id,rappel){
   const r=RDVS.find(x=>x.id===id),l=r&&LEADS.find(x=>x.id===r.leadId);if(!l)return;
   const num=telSmsPf(l.tel);if(!num){toast('Pas de numéro de portable pour ce client.','⚠️');return;}
   r[rappel?'rappel':'sms']={cle:cleRdv(r),envoye:Date.now()};saveStore();
+  /* Le relais automatique ne doit pas renvoyer ce SMS */
+  if(synchroActive())appelServeur('/pf/sms/envoye/'+cleSmsAuto(r,rappel),{method:'PUT'}).catch(()=>{});
   logAct((rappel?'Rappel':'Confirmation')+' '+r.type+' envoyé(e) par SMS',l.nom);
   location.href='sms:'+num+(/android/i.test(navigator.userAgent)?'?':'&')+'body='+encodeURIComponent(texteSmsRdv(r,l,rappel));   /* Android : « ?body= », iPhone : « &body= » */
   setTimeout(()=>{majJournee();if(document.getElementById('modal-bd').classList.contains('open')&&_leadOuvert===l.id)openLeadDetail(l.id);},400);

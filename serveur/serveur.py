@@ -13,10 +13,11 @@ Accès : chaque personne a son code personnel (en-tête X-Code), enregistré hac
 pour les seuls appareils du réseau privé.
 """
 import hashlib, hmac, json, os, re, threading, time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = '1.0.0'
+VERSION = '1.1.0'
 DATA = os.environ.get('SUBLIME_DATA', '/var/lib/sublime-synchro')
 COMPTES = os.path.join(DATA, 'comptes.json')
 HOTE = os.environ.get('SUBLIME_HOTE', '127.0.0.1')
@@ -126,6 +127,80 @@ def sans_sms_passes(etat):
     return etat
 
 
+# ── Relais SMS ───────────────────────────────────────────
+# La plateforme publique, dans son état, la liste « smsAFaire » (confirmations, rappels de la veille).
+# Le téléphone de chaque personne (raccourci iPhone, MacroDroid) demande « le SMS suivant » qui lui revient,
+# l'envoie, puis le déclare envoyé : le registre commun empêche tout double envoi.
+PARIS = ZoneInfo('Europe/Paris')
+REGISTRE = os.path.join(DATA, 'pf', 'sms-envoyes.json')
+_verrou_sms = threading.Lock()
+
+
+def lire_registre():
+    try:
+        with open(REGISTRE, encoding='utf-8') as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def date_iso(x):
+    try:
+        d = datetime.fromisoformat(str(x).replace('Z', '+00:00'))
+        return d if d.tzinfo else d.replace(tzinfo=PARIS)
+    except ValueError:
+        return None
+
+
+def heures_ok(maintenant):
+    """Pas de SMS aux clients la nuit : de 8 h à 20 h 30 (heure de Paris)."""
+    h = maintenant.astimezone(PARIS)
+    return (8, 0) <= (h.hour, h.minute) <= (20, 30)
+
+
+def file_sms(pour):
+    """SMS à envoyer maintenant par cette personne, d'après l'état de plateforme le plus récent."""
+    dossier = os.path.join(DATA, 'pf', 'etats')
+    fichiers = [os.path.join(dossier, f) for f in os.listdir(dossier) if f.endswith('.json')]
+    if not fichiers:
+        return []
+    try:
+        with open(max(fichiers, key=os.path.getmtime), encoding='utf-8') as f:
+            items = json.load(f).get('smsAFaire') or []
+    except (OSError, ValueError):
+        return []
+    maintenant, reg, out = datetime.now(timezone.utc), lire_registre(), []
+    if not heures_ok(maintenant):
+        return []
+    for it in items:
+        if not isinstance(it, dict) or it.get('pour') != pour or not ID_OK.match(str(it.get('k', ''))) or it['k'] in reg:
+            continue
+        apres, rdv = date_iso(it.get('apres', '')), date_iso(it.get('rdv', ''))
+        if not rdv or rdv <= maintenant + timedelta(hours=2 if it.get('requiert') else 1):
+            continue                      # rendez-vous passé ou trop proche
+        if apres and apres > maintenant:
+            continue                      # pas encore l'heure (rappel : à partir de 16 h la veille)
+        req = it.get('requiert')
+        if req and not it.get('confirmeManuel'):
+            conf = reg.get(req)
+            if not conf or (date_iso(conf.get('le', '')) or maintenant) > maintenant - timedelta(hours=12):
+                continue                  # rappel seulement si la confirmation est partie depuis au moins 12 h
+        if not it.get('tel') or not it.get('texte'):
+            continue
+        out.append({'k': it['k'], 'tel': it['tel'], 'texte': it['texte']})
+    return out
+
+
+def noter_envoye(k, par):
+    with _verrou_sms:
+        reg = lire_registre()
+        if k not in reg:
+            reg[k] = {'le': datetime.now(timezone.utc).isoformat(), 'par': par}
+        limite = datetime.now(timezone.utc) - timedelta(days=90)
+        reg = {c: v for c, v in reg.items() if (date_iso(v.get('le', '')) or limite) >= limite}
+        ecrire(REGISTRE, json.dumps(reg, ensure_ascii=False).encode('utf-8'))
+
+
 class Gestion(BaseHTTPRequestHandler):
     server_version = 'SublimeSynchro/' + VERSION
     protocol_version = 'HTTP/1.1'
@@ -141,7 +216,7 @@ class Gestion(BaseHTTPRequestHandler):
             corps = json.dumps(corps, ensure_ascii=False).encode('utf-8')
         self.send_response(code)
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, PUT, DELETE, OPTIONS')
+        self.send_header('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'X-Code, Content-Type, If-None-Match')
         self.send_header('Access-Control-Expose-Headers', 'ETag')
         self.send_header('Access-Control-Max-Age', '86400')
@@ -201,6 +276,13 @@ class Gestion(BaseHTTPRequestHandler):
                                        'email': c.get('email', ''), 'tel': c.get('tel', '')})
         if parts == ['equipe']:
             return self.repondre(200, {'equipe': [{k: x.get(k, '') for k in ('id', 'nom', 'role', 'email', 'tel')} for x in comptes()]})
+        if parts == ['pf', 'sms', 'suivant']:
+            f = file_sms(c['id'])
+            return self.repondre(200, f[0] if f else {'k': '', 'tel': '', 'texte': '', 'reste': 0})
+        if parts == ['pf', 'sms', 'file']:
+            return self.repondre(200, {'sms': file_sms(c['id']), 'heuresOk': heures_ok(datetime.now(timezone.utc))})
+        if parts == ['pf', 'sms', 'envoyes']:
+            return self.repondre(200, {'envoyes': lire_registre()})
         if not parts or parts[0] not in ESPACES:
             return self.repondre(404, {'erreur': 'Inconnu'})
         esp, base = parts[0], os.path.join(DATA, parts[0])
@@ -236,11 +318,20 @@ class Gestion(BaseHTTPRequestHandler):
             return self.repondre(404, {'erreur': 'Photo absente'})
         self.repondre(404, {'erreur': 'Inconnu'})
 
+    def do_POST(self):
+        self.do_PUT()
+
     def do_PUT(self):
         c = self.compte()
         if not c:
             return
         parts, _ = self.decouper()
+        if len(parts) == 4 and parts[:3] == ['pf', 'sms', 'envoye'] and ID_OK.match(parts[3]):
+            n = int(self.headers.get('Content-Length') or 0)
+            if 0 < n < 100000:
+                self.rfile.read(n)
+            noter_envoye(parts[3], c['id'])
+            return self.repondre(200, {'ok': True})
         if len(parts) != 3 or parts[0] not in ESPACES or not ID_OK.match(parts[2]):
             return self.repondre(404, {'erreur': 'Inconnu'})
         esp, base = parts[0], os.path.join(DATA, parts[0])
