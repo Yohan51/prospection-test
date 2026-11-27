@@ -12,12 +12,12 @@ Accès : chaque personne a son code personnel (en-tête X-Code), enregistré hac
 (outil : comptes.py). Le serveur n'écoute que sur la machine elle-même : Tailscale le publie en https
 pour les seuls appareils du réseau privé.
 """
-import hashlib, hmac, json, os, re, threading, time
+import hashlib, hmac, json, os, re, tarfile, tempfile, threading, time
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = '1.2.0'
+VERSION = '1.3.0'
 DATA = os.environ.get('SUBLIME_DATA', '/var/lib/sublime-synchro')
 COMPTES = os.path.join(DATA, 'comptes.json')
 HOTE = os.environ.get('SUBLIME_HOTE', '127.0.0.1')
@@ -369,6 +369,26 @@ class Gestion(BaseHTTPRequestHandler):
                                        'email': c.get('email', ''), 'tel': c.get('tel', '')})
         if parts == ['equipe']:
             return self.repondre(200, {'equipe': [{k: x.get(k, '') for k in ('id', 'nom', 'role', 'email', 'tel')} for x in comptes()]})
+        if parts == ['sauvegarde']:
+            # Archive complète et à jour des données (pour la copie automatique sur le Mac) : direction ou administrateur
+            if c.get('role') != 'direction' and not c.get('admin'):
+                return self.repondre(403, {'erreur': 'Réservé à la direction et à l’administrateur'})
+            with tempfile.TemporaryFile() as tmp:
+                with tarfile.open(fileobj=tmp, mode='w:gz') as tar:
+                    tar.add(DATA, arcname='sublime-synchro', filter=lambda i: None if i.name.endswith('.tmp') else i)
+                n = tmp.tell()
+                tmp.seek(0)
+                self.send_response(200)
+                for k, v in (('Content-Type', 'application/gzip'), ('Content-Length', str(n)), ('Cache-Control', 'no-store'),
+                             ('Content-Disposition', 'attachment; filename="sublime-%s.tar.gz"' % time.strftime('%Y-%m-%d_%H%M'))):
+                    self.send_header(k, v)
+                self.end_headers()
+                while True:
+                    bloc = tmp.read(1 << 20)
+                    if not bloc:
+                        break
+                    self.wfile.write(bloc)
+            return
         if parts == ['pf', 'agenda', 'lien']:
             return self.repondre(200, {'chemin': '/pf/agenda/%s-%s.ics' % (c['id'], jeton(c['id'])), 'direction': c.get('role') == 'direction'})
         if parts == ['pf', 'sms', 'suivant']:

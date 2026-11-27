@@ -5,6 +5,7 @@
   sudo sublime-comptes code <identifiant>        (change le code d'une personne)
   sudo sublime-comptes desactiver <identifiant>  (téléphone perdu, départ…)
   sudo sublime-comptes activer <identifiant>
+  sudo sublime-comptes admin <identifiant>       (autorise la copie automatique des sauvegardes sur son Mac)
 
 Les codes ne sont jamais enregistrés en clair : seul leur hachage est gardé dans comptes.json.
 """
@@ -70,6 +71,14 @@ def main(a):
         cs.append({'id': i, 'nom': nom, 'role': role, 'email': a[4] if len(a) > 4 else '', 'code': demander_code(cs), 'actif': True})
         ecrire(d)
         print(f'Compte « {i} » créé ({nom}, {role}).')
+        return
+    if a[0] == 'admin' and len(a) == 2:
+        c = trouve(a[1].lower())
+        if not c:
+            sys.exit(f'Pas de compte « {a[1]} ».')
+        c['admin'] = True
+        ecrire(d)
+        print(f'« {c["id"]} » peut maintenant récupérer les sauvegardes.')
         return
     if a[0] in ('code', 'desactiver', 'activer') and len(a) == 2:
         c = trouve(a[1].lower())
